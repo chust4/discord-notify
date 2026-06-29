@@ -263,7 +263,9 @@ apiRouter.post('/settings/:settingId/test', wrap(async (req, res) => {
   if (!isReady()) return res.status(503).json({ error: 'Bot Discord jest offline' });
   const result = await sendTest(setting);
   const ok = ['sent', 'panel_edited'].includes(result.status);
-  res.status(ok ? 200 : 502).json(result);
+  // Always answer 200: a failed test is a diagnostic outcome, not an HTTP
+  // error. The real reason is in `detail` so the panel can show it verbatim.
+  res.json({ ok, status: result.status, detail: result.detail });
 }));
 
 /* ---------------------------------------------------------------- templates */

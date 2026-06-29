@@ -14,7 +14,7 @@ async function request(method, path, body) {
     data = { raw: text };
   }
   if (!res.ok) {
-    const err = new Error((data && data.error) || `HTTP ${res.status}`);
+    const err = new Error((data && (data.error || data.detail)) || `HTTP ${res.status}`);
     err.status = res.status;
     err.data = data;
     throw err;
