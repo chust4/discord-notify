@@ -107,10 +107,41 @@ function profileCardHtml(p) {
         </div>
       </div>
       <div class="integrations">${integrations}</div>
+      ${statTilesHtml(p)}
       <div class="event-line">
         <div>🕒 Ostatnie zdarzenie: ${p.last_event_type ? `${esc(p.last_event_type)} · ${fmtDate(p.last_event_at)}` : '—'}</div>
         ${p.last_error ? `<div class="error-text">⚠️ ${esc(p.last_error)} · ${fmtDate(p.last_error_at)}</div>` : ''}
       </div>
+    </div>`;
+}
+
+// Small at-a-glance tiles on each profile card: delivered notifications per
+// platform (only platforms the profile actually has) + totals.
+function statTilesHtml(p) {
+  const stats = p.stats || { sentByPlatform: {}, totalSent: 0, detected: 0, failed: 0 };
+  const platformTiles = (p.integrations || [])
+    .map((i) => {
+      const n = stats.sentByPlatform?.[i.platform] || 0;
+      return `<div class="mini-tile ${i.platform}">
+        <div class="mini-val">${n}</div>
+        <div class="mini-key">${PLATFORM_ICON[i.platform] || ''} ${esc(i.label || i.platform)}</div>
+      </div>`;
+    })
+    .join('');
+  return `
+    <div class="mini-tiles">
+      ${platformTiles}
+      <div class="mini-tile total">
+        <div class="mini-val">${stats.totalSent || 0}</div>
+        <div class="mini-key">📨 Łącznie</div>
+      </div>
+      <div class="mini-tile">
+        <div class="mini-val">${stats.detected || 0}</div>
+        <div class="mini-key">👁️ Wykryte</div>
+      </div>
+      ${stats.failed
+        ? `<div class="mini-tile fail"><div class="mini-val">${stats.failed}</div><div class="mini-key">⚠️ Błędy</div></div>`
+        : ''}
     </div>`;
 }
 
@@ -213,9 +244,11 @@ function renderAccounts(profile) {
     .map(
       (a) => `
       <div class="card" style="display:flex;align-items:center;gap:12px">
-        ${avatarHtml(a.avatar_url, a.display_name)}
+        <a href="${esc(a.input_url || '#')}" target="_blank" rel="noopener" title="Otwórz ${esc(a.platform)}">${avatarHtml(a.avatar_url, a.display_name)}</a>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600">${PLATFORM_ICON[a.platform]} ${esc(a.display_name || a.identifier)}</div>
+          <a href="${esc(a.input_url || '#')}" target="_blank" rel="noopener" class="account-link" title="Otwórz profil ${esc(a.platform)}">
+            <span style="font-weight:600">${PLATFORM_ICON[a.platform]} ${esc(a.display_name || a.identifier)}</span> ↗
+          </a>
           <div class="faint" style="word-break:break-all">${esc(a.input_url || a.identifier)}</div>
           ${a.last_error ? `<div class="error-text" style="font-size:12px">⚠️ ${esc(a.last_error)}</div>` : ''}
         </div>

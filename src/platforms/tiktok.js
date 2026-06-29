@@ -1,6 +1,7 @@
 import { httpGetText } from './http.js';
 import { createLogger } from '../logger.js';
 import { config } from '../config.js';
+import { isAvailable, flatPlaylist } from './ytdlp.js';
 
 const log = createLogger('platform:tiktok');
 
@@ -139,8 +140,61 @@ async function checkLive(account, state, events) {
   }
 }
 
-/** Best-effort new-video detection by scraping the profile HTML. */
+// New-video detection. Prefers yt-dlp (reliable, handles TikTok's signing);
+// falls back to best-effort HTML scraping when yt-dlp is unavailable.
 async function checkVideos(account, state, events) {
+  if (await isAvailable()) {
+    return checkVideosYtDlp(account, state, events);
+  }
+  return checkVideosScrape(account, state, events);
+}
+
+/**
+ * yt-dlp path. We keep a small set of recently-seen video ids in
+ * `last_video_id` (comma-separated) instead of a single watermark, so pinned
+ * posts (which TikTok lists first regardless of date) never block detection of
+ * a genuinely new upload. The persistent seen_items ledger is the safety net.
+ */
+async function checkVideosYtDlp(account, state, events) {
+  const url = `https://www.tiktok.com/@${account.identifier}`;
+  const entries = await flatPlaylist(url, { limit: 12 });
+  if (!entries.length) throw new Error('yt-dlp zwrócił pustą listę filmów');
+
+  const ids = entries.map((e) => String(e.id));
+  const known = new Set((account.last_video_id || '').split(',').filter(Boolean));
+
+  if (known.size === 0) {
+    // First run: establish a baseline, do not blast the back-catalogue.
+    state.last_video_id = ids.slice(0, 60).join(',');
+    return;
+  }
+
+  // Oldest-first so notifications fire in chronological order.
+  const fresh = ids.filter((id) => !known.has(id)).reverse();
+  const byId = new Map(entries.map((e) => [String(e.id), e]));
+  for (const id of fresh) {
+    const e = byId.get(id) || {};
+    events.push({
+      event_type: 'tiktok_video',
+      external_id: id,
+      title: e.title || e.description || 'Nowy film na TikTok',
+      url: e.url || `https://www.tiktok.com/@${account.identifier}/video/${id}`,
+      thumbnail_url: e.thumbnails?.[e.thumbnails.length - 1]?.url || '',
+      published_at: e.timestamp
+        ? new Date(e.timestamp * 1000).toISOString()
+        : new Date().toISOString(),
+      duration: e.duration ? `${Math.round(e.duration)}s` : '',
+      viewer_count: '',
+      category: '',
+    });
+  }
+
+  // Merge current + known, newest-first, capped so the column stays small.
+  state.last_video_id = [...new Set([...ids, ...known])].slice(0, 60).join(',');
+}
+
+/** Best-effort new-video detection by scraping the profile HTML. */
+async function checkVideosScrape(account, state, events) {
   const html = await fetchProfileHtml(account.identifier);
   const data = extractUniversalData(html);
   const items = extractItems(data);
@@ -150,14 +204,15 @@ async function checkVideos(account, state, events) {
   if (!latestId) {
     // TikTok renders the video list client-side via a signed API call, so the
     // server HTML often has no items (especially from a datacenter/NAS IP).
-    throw new Error('lista filmów niedostępna ze strony (ograniczenie TikToka)');
+    throw new Error('lista filmów niedostępna ze strony (włącz yt-dlp — patrz README)');
   }
 
-  if (!account.last_video_id) {
+  const known = new Set((account.last_video_id || '').split(',').filter(Boolean));
+  if (known.size === 0) {
     state.last_video_id = latestId;
     return;
   }
-  if (latestId !== account.last_video_id) {
+  if (!known.has(latestId)) {
     const item = typeof latest === 'object' ? latest : {};
     events.push({
       event_type: 'tiktok_video',
@@ -172,7 +227,7 @@ async function checkVideos(account, state, events) {
       viewer_count: '',
       category: '',
     });
-    state.last_video_id = latestId;
+    state.last_video_id = [latestId, ...known].slice(0, 60).join(',');
   }
 }
 

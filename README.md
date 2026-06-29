@@ -191,6 +191,12 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 > nie musisz nic robić ręcznie. Nowe migracje dodawaj jako kolejne pliki
 > `src/db/migrations/NNN_*.sql`.
 
+> **Numer wersji** (widoczny w panelu, lewy górny róg i Diagnostyka) jest czytany
+> z `package.json`, więc **aktualizuje się automatycznie** po przebudowie obrazu
+> z nowym kodem. Jeśli po redeployu nadal widzisz starą wersję — obraz nie został
+> przebudowany (patrz uwaga o „Re-pull image" powyżej) lub przeglądarka trzyma
+> stary panel w cache (zrób **Ctrl + F5**).
+
 ---
 
 ## 7. Klucze API platform (opcjonalne)
@@ -200,7 +206,7 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 | **YouTube** | Opcjonalnie (`YOUTUBE_API_KEY`) | Bez klucza: wykrywanie **nowych filmów** działa (RSS). Z kluczem: dochodzą **avatary**, rozróżnianie **Shorts vs film** (po długości) oraz wykrywanie **live**. |
 | **Twitch** | Tak (`TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET`) | Wykrywanie **live start/end**, avatar, kategoria, liczba widzów. |
 | **Kick** | Nie | Publiczne API — live start/end, avatar (best-effort). |
-| **TikTok** | Nie (opcjonalnie `SIGN_API_KEY`) | **LIVE** wykrywany niezawodnie przez `tiktok-live-connector` (node'owy odpowiednik [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive)). **Nowe filmy** = best-effort (scraping, bywa zawodny z IP NAS). |
+| **TikTok** | Nie (opcjonalnie `SIGN_API_KEY`) | **LIVE** przez `tiktok-live-connector` (node'owy odpowiednik [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive)). **Nowe filmy** przez wbudowany **yt-dlp** (`YTDLP_ENABLED=true`), z fallbackiem do scrapingu. |
 
 - **YouTube API key:** Google Cloud Console → włącz *YouTube Data API v3* → utwórz *API key*.
 - **Twitch:** <https://dev.twitch.tv/console/apps> → *Register Your Application* →

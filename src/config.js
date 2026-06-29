@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +9,15 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
+
+// Version comes from package.json so it tracks the code automatically; an
+// explicit APP_VERSION env still wins if set.
+let pkgVersion = '1.0.0';
+try {
+  pkgVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || pkgVersion;
+} catch {
+  /* keep fallback */
+}
 
 function bool(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -38,7 +48,7 @@ export const config = {
   port: int(process.env.PORT, 8092),
   host: process.env.HOST || '0.0.0.0',
   appName: process.env.APP_NAME || 'Discord Notify',
-  version: process.env.APP_VERSION || '1.0.0',
+  version: process.env.APP_VERSION || pkgVersion,
 
   // Storage
   dataDir,
@@ -86,6 +96,14 @@ export const config = {
     // Optional EulerStream sign key — read directly from env by the library;
     // only improves rate limits, not required for fetchIsLive().
     signApiKey: process.env.SIGN_API_KEY || '',
+  },
+
+  // yt-dlp powers reliable TikTok new-video detection (and is reusable for
+  // other platforms). Disable to fall back to HTML scraping.
+  ytdlp: {
+    enabled: bool(process.env.YTDLP_ENABLED, true),
+    path: process.env.YTDLP_PATH || 'yt-dlp',
+    timeoutMs: int(process.env.YTDLP_TIMEOUT_MS, 60000),
   },
 
   // Web panel basic auth (optional but recommended on a LAN).

@@ -139,10 +139,12 @@ function profileCard(p) {
       platform: a.platform,
       label: PLATFORM_LABELS[a.platform],
       display_name: a.display_name,
+      input_url: a.input_url,
       enabled: Boolean(a.enabled),
       is_live: Boolean(a.is_live),
       last_error: a.last_error,
     })),
+    stats: Events.statsForProfile(p.id),
   };
 }
 

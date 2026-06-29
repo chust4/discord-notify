@@ -146,6 +146,25 @@ button { font-family: inherit; }
 .error-text { color: var(--red); }
 .event-line { font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--border-soft); padding-top: 10px; }
 
+/* per-card at-a-glance stat tiles */
+.mini-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; }
+.mini-tile {
+  background: var(--bg-elev-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 8px 6px; text-align: center;
+}
+.mini-tile .mini-val { font-size: 19px; font-weight: 800; line-height: 1.1; }
+.mini-tile .mini-key { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-tile.total { border-color: var(--accent); }
+.mini-tile.total .mini-val { color: #8b95f6; }
+.mini-tile.fail .mini-val { color: var(--red); }
+.mini-tile.youtube .mini-val { color: var(--youtube); }
+.mini-tile.tiktok .mini-val { color: var(--tiktok); }
+.mini-tile.twitch .mini-val { color: var(--twitch); }
+.mini-tile.kick .mini-val { color: var(--kick); }
+
+.account-link { color: var(--text); display: inline-block; text-decoration: none; }
+.account-link:hover { color: var(--accent); }
+
 /* switch */
 .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
 .switch input { opacity: 0; width: 0; height: 0; }

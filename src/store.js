@@ -374,6 +374,38 @@ export const Events = {
       )
       .all(limit);
   },
+  /**
+   * At-a-glance stats for a profile card: notifications delivered per platform,
+   * total delivered, detected events and failures.
+   */
+  statsForProfile(profile_id) {
+    const db = getDb();
+    const sentRows = db
+      .prepare(
+        `SELECT platform, COUNT(*) AS c FROM events
+         WHERE profile_id = ? AND status IN ('sent','panel_edited')
+         GROUP BY platform`
+      )
+      .all(profile_id);
+    const sentByPlatform = {};
+    let totalSent = 0;
+    for (const r of sentRows) {
+      if (r.platform) sentByPlatform[r.platform] = r.c;
+      totalSent += r.c;
+    }
+    const detected = db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM events WHERE profile_id = ? AND status = 'detected'`
+      )
+      .get(profile_id).c;
+    const failed = db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM events
+         WHERE profile_id = ? AND status IN ('api_error','no_permission','send_failed')`
+      )
+      .get(profile_id).c;
+    return { sentByPlatform, totalSent, detected, failed };
+  },
   /** Delete history rows older than the retention window. */
   purgeOlderThan(days) {
     return getDb()

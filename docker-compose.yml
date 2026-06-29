@@ -29,7 +29,8 @@ services:
       NODE_ENV: production
       PORT: "8092"
       APP_NAME: ${APP_NAME:-Discord Notify}
-      APP_VERSION: "1.0.0"
+      # Leave empty to use the version from package.json (recommended).
+      APP_VERSION: ${APP_VERSION:-}
       DATA_DIR: /app/data
       LOG_DIR: /app/data/logs
 
@@ -58,6 +59,8 @@ services:
       # (EulerStream) and only helps with rate limits.
       TIKTOK_LIVE_ENABLED: ${TIKTOK_LIVE_ENABLED:-true}
       SIGN_API_KEY: ${SIGN_API_KEY:-}
+      # yt-dlp powers TikTok new-video detection (bundled in the image).
+      YTDLP_ENABLED: ${YTDLP_ENABLED:-true}
 
       # Optional Basic-Auth for the web panel (recommended on a LAN)
       PANEL_USER: ${PANEL_USER:-}
