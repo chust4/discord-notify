@@ -14,6 +14,10 @@ services:
       context: .
       dockerfile: Dockerfile
     image: discord-notify:latest
+    # Build the image locally; never try to pull it from a registry. This stops
+    # Portainer's "re-pull image" from failing with "pull access denied" — the
+    # image only exists locally because it is built from this repo's Dockerfile.
+    pull_policy: build
     container_name: discord-notify
     restart: unless-stopped
 

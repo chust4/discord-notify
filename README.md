@@ -172,10 +172,17 @@ Po wypchnięciu zmian na GitHub:
 
 **Wariant A — w Portainerze (zalecany):**
 1. **Stacks → discord-notify**.
-2. Kliknij **Pull and redeploy** (lub **Update the stack** → zaznacz
-   **Re-pull image and redeploy** / **Re-build**).
-3. Portainer pobierze najnowszy kod z repo, przebuduje obraz i zrestartuje kontener.
+2. Kliknij **Pull and redeploy** (pobiera najnowszy commit z Git i przebudowuje obraz).
+3. ⚠️ **NIE zaznaczaj „Re-pull image"** — ten obraz nie istnieje w żadnym rejestrze,
+   bo jest budowany lokalnie z `Dockerfile`. Zaznaczenie tej opcji kończy się błędem
+   `pull access denied for discord-notify`. Stack ma już `pull_policy: build`, więc
+   Docker zawsze **buduje** obraz zamiast go pobierać.
+4. Portainer pobierze najnowszy kod z repo, przebuduje obraz i zrestartuje kontener.
    Dane (baza, logi) zostają nienaruszone na wolumenie.
+
+> Jeśli mimo wszystko widzisz `pull access denied`: w edytorze stacku kliknij
+> **Update the stack** z odznaczoną opcją „Re-pull image" — samo zaktualizowanie
+> (redeploy) przebuduje obraz z nowego kodu.
 
 **Wariant B — automatycznie:** w ustawieniach stacku włącz **GitOps updates /
 Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwale.
