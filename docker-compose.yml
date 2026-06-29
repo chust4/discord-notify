@@ -1,0 +1,84 @@
+# Discord Notify — Portainer Stack (Git repository) ready.
+#
+# Portainer → Stacks → Add stack → Repository:
+#   - Repository URL:  https://github.com/chust4/discord-notify
+#   - Compose path:    docker-compose.yml
+#   - Add the environment variables from .env.example in the
+#     "Environment variables" section of the stack (at minimum DISCORD_TOKEN).
+#
+# The app is exposed on http://<NAS-IP>:8092  (e.g. http://192.168.0.32:8092)
+
+services:
+  discord-notify:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: discord-notify:latest
+    container_name: discord-notify
+    restart: unless-stopped
+
+    ports:
+      # host:container — change the host side via APP_PORT if 8092 is taken.
+      - "${APP_PORT:-8092}:8092"
+
+    environment:
+      NODE_ENV: production
+      PORT: "8092"
+      APP_NAME: ${APP_NAME:-Discord Notify}
+      APP_VERSION: "1.0.0"
+      DATA_DIR: /app/data
+      LOG_DIR: /app/data/logs
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DEBUG: ${DEBUG:-false}
+      LOG_TO_FILE: ${LOG_TO_FILE:-true}
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
+
+      # Polling
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-300}
+      YOUTUBE_SHORT_MAX_SECONDS: ${YOUTUBE_SHORT_MAX_SECONDS:-180}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+
+      # Discord (required for the bot — panel runs without it)
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_AUTHORIZED_GUILD_IDS: ${DISCORD_AUTHORIZED_GUILD_IDS:-}
+      DISCORD_OWNER_IDS: ${DISCORD_OWNER_IDS:-}
+
+      # Platform API credentials (optional, polling degrades gracefully)
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+
+      # Optional Basic-Auth for the web panel (recommended on a LAN)
+      PANEL_USER: ${PANEL_USER:-}
+      PANEL_PASSWORD: ${PANEL_PASSWORD:-}
+
+    volumes:
+      # Persistent data (SQLite DB + rotating logs).
+      # Default = bind mount to the Synology folder you specified, so the files
+      # are visible in File Station. Override DATA_PATH to use another folder,
+      # or replace this line with the named-volume option below.
+      - ${DATA_PATH:-/volume1/docker/discord-notify-bot}:/app/data
+      # Named-volume alternative (no host path, zero permission fuss):
+      #   - discord-notify-data:/app/data
+
+    healthcheck:
+      test: ["CMD", "node", "src/healthcheck.js"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 25s
+
+    # Container log rotation so Docker's json logs never fill the NAS disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+# Uncomment to use the named-volume option above instead of the bind mount.
+# volumes:
+#   discord-notify-data:
+#     driver: local
