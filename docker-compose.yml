@@ -50,6 +50,10 @@ services:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+      # TikTok LIVE detection (tiktok-live-connector). SIGN_API_KEY is optional
+      # (EulerStream) and only helps with rate limits.
+      TIKTOK_LIVE_ENABLED: ${TIKTOK_LIVE_ENABLED:-true}
+      SIGN_API_KEY: ${SIGN_API_KEY:-}
 
       # Optional Basic-Auth for the web panel (recommended on a LAN)
       PANEL_USER: ${PANEL_USER:-}

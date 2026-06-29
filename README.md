@@ -193,11 +193,14 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 | **YouTube** | Opcjonalnie (`YOUTUBE_API_KEY`) | Bez klucza: wykrywanie **nowych filmów** działa (RSS). Z kluczem: dochodzą **avatary**, rozróżnianie **Shorts vs film** (po długości) oraz wykrywanie **live**. |
 | **Twitch** | Tak (`TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET`) | Wykrywanie **live start/end**, avatar, kategoria, liczba widzów. |
 | **Kick** | Nie | Publiczne API — live start/end, avatar (best-effort). |
-| **TikTok** | Nie | Best-effort (scraping) — wykrywanie nowych filmów bywa zawodne, live trudne. TikTok aktywnie utrudnia automatyzację. |
+| **TikTok** | Nie (opcjonalnie `SIGN_API_KEY`) | **LIVE** wykrywany niezawodnie przez `tiktok-live-connector` (node'owy odpowiednik [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive)). **Nowe filmy** = best-effort (scraping, bywa zawodny z IP NAS). |
 
 - **YouTube API key:** Google Cloud Console → włącz *YouTube Data API v3* → utwórz *API key*.
 - **Twitch:** <https://dev.twitch.tv/console/apps> → *Register Your Application* →
   skopiuj *Client ID* i *Client Secret*.
+- **TikTok LIVE:** działa od razu (`TIKTOK_LIVE_ENABLED=true`). Jeśli trafisz na
+  limity zapytań, załóż darmowy klucz na <https://www.eulerstream.com> i ustaw
+  `SIGN_API_KEY`. Uwaga: biblioteka wykrywa **transmisje live**, nie nowe filmy.
 
 ---
 

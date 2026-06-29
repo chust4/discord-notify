@@ -1,5 +1,6 @@
 import { httpGetText } from './http.js';
 import { createLogger } from '../logger.js';
+import { config } from '../config.js';
 
 const log = createLogger('platform:tiktok');
 
@@ -98,21 +99,49 @@ function extractItems(data) {
   return [];
 }
 
-export async function check(account) {
-  const events = [];
-  const state = {
-    last_video_id: account.last_video_id,
-    is_live: account.is_live,
-    live_id: account.live_id,
-  };
+/**
+ * Reliable TikTok LIVE detection via tiktok-live-connector (the Node port of
+ * isaackogan/TikTokLive). `fetchIsLive()` is a single HTTP check — it does NOT
+ * open the chat websocket, so it needs no EulerStream sign key. The connector
+ * is lazy-imported so a problem with the package can never break app startup.
+ * TikTok has no "live end" event type, so we only emit on the off->on edge.
+ */
+async function checkLive(account, state, events) {
+  const { TikTokLiveConnection } = await import('tiktok-live-connector');
+  const conn = new TikTokLiveConnection(account.identifier, {});
+  const live = await conn.fetchIsLive();
+  const wasLive = Boolean(account.is_live);
 
-  let html;
-  try {
-    html = await fetchProfileHtml(account.identifier);
-  } catch (err) {
-    return { events, state, error: `TikTok fetch error: ${err.message}` };
+  if (live && !wasLive) {
+    let info = {};
+    try {
+      info = await conn.fetchRoomInfo();
+    } catch {
+      /* room info is best-effort */
+    }
+    const roomId = String(info?.id || info?.roomId || Date.now());
+    state.is_live = 1;
+    state.live_id = roomId;
+    events.push({
+      event_type: 'tiktok_live',
+      external_id: `${roomId}:start`,
+      title: info?.title || `${account.display_name || account.identifier} jest LIVE na TikTok`,
+      url: `https://www.tiktok.com/@${account.identifier}/live`,
+      thumbnail_url: info?.cover?.url_list?.[0] || '',
+      published_at: new Date().toISOString(),
+      duration: '',
+      viewer_count: String(info?.user_count ?? info?.stats?.total_user ?? ''),
+      category: '',
+    });
+  } else {
+    state.is_live = live ? 1 : 0;
+    if (!live) state.live_id = null;
   }
+}
 
+/** Best-effort new-video detection by scraping the profile HTML. */
+async function checkVideos(account, state, events) {
+  const html = await fetchProfileHtml(account.identifier);
   const data = extractUniversalData(html);
   const items = extractItems(data);
   const latest = items[0];
@@ -121,19 +150,13 @@ export async function check(account) {
   if (!latestId) {
     // TikTok renders the video list client-side via a signed API call, so the
     // server HTML often has no items (especially from a datacenter/NAS IP).
-    // This is a known best-effort limitation, not a misconfiguration.
-    return {
-      events,
-      state,
-      error: 'TikTok: lista filmów niedostępna ze strony (ograniczenie TikToka — patrz README)',
-    };
+    throw new Error('lista filmów niedostępna ze strony (ograniczenie TikToka)');
   }
 
   if (!account.last_video_id) {
     state.last_video_id = latestId;
-    return { events, state, error: null };
+    return;
   }
-
   if (latestId !== account.last_video_id) {
     const item = typeof latest === 'object' ? latest : {};
     events.push({
@@ -151,6 +174,43 @@ export async function check(account) {
     });
     state.last_video_id = latestId;
   }
+}
 
-  return { events, state, error: null };
+export async function check(account) {
+  const events = [];
+  const state = {
+    last_video_id: account.last_video_id,
+    is_live: account.is_live,
+    live_id: account.live_id,
+  };
+
+  let liveError = null;
+  if (config.tiktok.liveEnabled) {
+    try {
+      await checkLive(account, state, events);
+    } catch (err) {
+      liveError = `live: ${err.message}`;
+    }
+  }
+
+  let videoError = null;
+  try {
+    await checkVideos(account, state, events);
+  } catch (err) {
+    videoError = `video: ${err.message}`;
+  }
+
+  // When live detection is the active (reliable) path, keep flaky video-scrape
+  // failures out of the surfaced error so they don't spam the panel/logs.
+  const errors = [];
+  if (liveError) errors.push(liveError);
+  if (videoError && (!config.tiktok.liveEnabled || liveError)) errors.push(videoError);
+  if (videoError && config.tiktok.liveEnabled && !liveError) {
+    log.debug('TikTok video scrape failed (best-effort)', {
+      account: account.identifier,
+      err: videoError,
+    });
+  }
+
+  return { events, state, error: errors.length ? `TikTok: ${errors.join(' | ')}` : null };
 }

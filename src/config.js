@@ -79,6 +79,14 @@ export const config = {
     clientId: process.env.TWITCH_CLIENT_ID || '',
     clientSecret: process.env.TWITCH_CLIENT_SECRET || '',
   },
+  tiktok: {
+    // Reliable TikTok LIVE detection via tiktok-live-connector. New-video
+    // detection stays best-effort regardless of this flag.
+    liveEnabled: bool(process.env.TIKTOK_LIVE_ENABLED, true),
+    // Optional EulerStream sign key — read directly from env by the library;
+    // only improves rate limits, not required for fetchIsLive().
+    signApiKey: process.env.SIGN_API_KEY || '',
+  },
 
   // Web panel basic auth (optional but recommended on a LAN).
   auth: {
