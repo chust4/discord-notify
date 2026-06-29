@@ -7,6 +7,7 @@ import {
   Events,
   Profiles,
   Guilds,
+  TempNotifications,
 } from '../store.js';
 import {
   EVENT_STATUS,
@@ -116,22 +117,33 @@ async function sendOne({ setting, event, profile, account, isTest = false }) {
   const content = renderTemplate(template, context);
 
   const mode = setting.mode || 'embed';
-  const payload = {};
-  if (mode === 'embed' || mode === 'panel' || mode === 'pinned_panel') {
-    payload.embeds = [buildEmbed(event, context, profile, account)];
-    // Keep ping/text outside the embed so role mentions actually ping.
-    if (content) payload.content = isTest ? `🧪 (TEST) ${content}` : content;
-  } else {
-    // Plain message: Discord rejects an empty body, so fall back to a minimal
-    // line if the template rendered to nothing.
-    const body = content || `${context.creator_name} — ${event.url || ''}`.trim();
-    payload.content = (isTest ? '🧪 (TEST) ' : '') + body;
-  }
+  const embed = buildEmbed(event, context, profile, account);
+  const allowedMentions = buildAllowedMentions(setting.role_ping_id);
 
   try {
-    if (mode === 'panel' || mode === 'pinned_panel') {
-      const result = await sendOrEditPanel({ client, channel, setting, payload, perm, mode });
-      return result;
+    // Hybrid pinned panel: keep editing the persistent pinned panel AND send a
+    // fresh, pinging notification message (deleting the previous temp one).
+    if (mode === 'pinned_panel') {
+      return await sendHybridPinnedPanel({
+        client, channel, setting, event, profile, account, embed, content, allowedMentions, perm, isTest,
+      });
+    }
+
+    // Plain panel: edit one message in place, no extra notification.
+    if (mode === 'panel') {
+      const payload = { embeds: [embed] };
+      if (content) payload.content = isTest ? `🧪 (TEST) ${content}` : content;
+      return await sendOrEditPanel({ channel, setting, payload });
+    }
+
+    // embed / message modes.
+    const payload = { allowedMentions };
+    if (mode === 'embed') {
+      payload.embeds = [embed];
+      if (content) payload.content = isTest ? `🧪 (TEST) ${content}` : content;
+    } else {
+      const body = content || `${context.creator_name} — ${event.url || ''}`.trim();
+      payload.content = (isTest ? '🧪 (TEST) ' : '') + body;
     }
     await channel.send(payload);
     return { status: EVENT_STATUS.SENT, detail: null };
@@ -143,33 +155,120 @@ async function sendOne({ setting, event, profile, account, isTest = false }) {
   }
 }
 
+/** Limit pings to exactly the configured role (or @everyone/@here, or none). */
+function buildAllowedMentions(role_ping_id) {
+  if (!role_ping_id) return { parse: [] };
+  if (role_ping_id === 'everyone' || role_ping_id === 'here') return { parse: ['everyone'] };
+  return { parse: [], roles: [role_ping_id] };
+}
+
 /**
- * Panel mode: edit the stored message if it still exists, otherwise create a
- * new one and persist its id. Pin when in pinned_panel mode and allowed.
+ * Plain panel mode: edit the stored message if it still exists, otherwise
+ * create a new one and persist its id.
  */
-async function sendOrEditPanel({ client, channel, setting, payload, perm, mode }) {
+async function sendOrEditPanel({ channel, setting, payload }) {
   if (setting.panel_message_id && setting.panel_channel_id === channel.id) {
     try {
       const msg = await channel.messages.fetch(setting.panel_message_id);
       await msg.edit(payload);
       return { status: EVENT_STATUS.PANEL_EDITED, detail: 'Zaktualizowano panel' };
     } catch {
-      // Message was deleted - fall through and recreate.
       log.warn('Panel message missing, recreating', { setting_id: setting.id });
     }
   }
-
   const msg = await channel.send(payload);
   NotificationSettings.setPanelMessage(setting.id, msg.id, channel.id);
+  return { status: EVENT_STATUS.SENT, detail: 'Utworzono panel' };
+}
 
-  if (mode === 'pinned_panel' && perm.permissions.ManageMessages) {
+/**
+ * Hybrid "przyklejona wiadomość" (pinned panel):
+ *  1. update/create+pin the persistent status panel (never deleted),
+ *  2. send a NEW temporary notification message (with role ping),
+ *  3. record its message_id,
+ *  4. delete the PREVIOUS temporary notification of the same type (own message
+ *     only, single delete — never bulk, never user messages, never the panel).
+ */
+async function sendHybridPinnedPanel({
+  client, channel, setting, event, profile, account, embed, content, allowedMentions, perm, isTest,
+}) {
+  // --- 1. persistent panel (status board) ---
+  const panelPayload = { embeds: [embed] };
+  let panelMsg = null;
+  if (setting.panel_message_id && setting.panel_channel_id === channel.id) {
     try {
-      await msg.pin();
-    } catch (err) {
-      log.warn('Could not pin panel', { err: err.message });
+      panelMsg = await channel.messages.fetch(setting.panel_message_id);
+      await panelMsg.edit(panelPayload);
+      log.info('Pinned panel updated', { setting_id: setting.id, channel: channel.id });
+    } catch {
+      panelMsg = null;
+      log.warn('Pinned panel missing, recreating', { setting_id: setting.id });
     }
   }
-  return { status: EVENT_STATUS.SENT, detail: 'Utworzono panel' };
+  if (!panelMsg) {
+    panelMsg = await channel.send(panelPayload);
+    NotificationSettings.setPanelMessage(setting.id, panelMsg.id, channel.id);
+    log.info('Pinned panel created', { setting_id: setting.id, message_id: panelMsg.id });
+    if (perm.permissions.ManageMessages) {
+      try {
+        await panelMsg.pin();
+      } catch (err) {
+        log.warn('Could not pin panel', { err: err.message });
+      }
+    }
+  }
+
+  // --- 2. temporary notification message (the real, pinging notification) ---
+  const notifContent = content || `${profile.name} — ${event.url || ''}`.trim();
+  const tempMsg = await channel.send({
+    content: (isTest ? '🧪 (TEST) ' : '') + notifContent,
+    embeds: [embed],
+    allowedMentions,
+  });
+  log.info('Temporary notification sent', {
+    profile: profile.name, event: event.event_type, channel: channel.id, message_id: tempMsg.id,
+  });
+
+  // --- 3. remember it ---
+  const newId = TempNotifications.record({
+    guild_id: setting.guild_id,
+    channel_id: channel.id,
+    profile_id: profile.id,
+    platform: account?.platform || event.platform || null,
+    event_type: event.event_type,
+    message_id: tempMsg.id,
+  });
+  log.info('Saved temp notification message_id', { id: newId, message_id: tempMsg.id });
+
+  // --- 4. delete the previous temp notification of the same type ---
+  const previous = TempNotifications.findActivePrevious({
+    guild_id: setting.guild_id,
+    channel_id: channel.id,
+    profile_id: profile.id,
+    platform: account?.platform || event.platform || null,
+    event_type: event.event_type,
+    excludeId: newId,
+  });
+  for (const prev of previous) {
+    try {
+      await channel.messages.delete(prev.message_id);
+      TempNotifications.markDeleted(prev.id);
+      log.info('Deleted previous temp notification', { message_id: prev.message_id });
+    } catch (err) {
+      // Own messages can normally be deleted without Manage Messages; treat any
+      // failure (already gone / missing permission) as non-fatal.
+      TempNotifications.markDeleted(prev.id); // stop retrying a message we can't remove
+      const reason = err.code === 10008 ? 'wiadomość już nie istnieje'
+        : err.code === 50013 ? 'brak uprawnień (Manage Messages)'
+        : err.message;
+      log.warn('Could not delete previous temp notification', {
+        message_id: prev.message_id, reason,
+        manageMessages: perm.permissions.ManageMessages,
+      });
+    }
+  }
+
+  return { status: EVENT_STATUS.SENT, detail: 'Panel zaktualizowany + wysłano powiadomienie' };
 }
 
 /**

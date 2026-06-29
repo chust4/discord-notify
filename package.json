@@ -1,6 +1,6 @@
 {
   "name": "discord-notify",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Web panel + Discord bot for notifying about new videos and live streams from YouTube, TikTok, Twitch and Kick.",
   "type": "module",
   "main": "src/index.js",

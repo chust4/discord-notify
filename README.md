@@ -242,7 +242,19 @@ działają w **jednym kontenerze/procesie** (brak problemów ze współdzielenie
 SQLite trzyma się prosto i bez osobnego kontenera bazy — idealne na NAS.
 
 **Tryb „panel":** bot zapisuje `message_id` wysłanej wiadomości i przy kolejnych
-zdarzeniach **edytuje tę samą wiadomość** zamiast wysyłać nową (opcjonalnie ją przypina).
+zdarzeniach **edytuje tę samą wiadomość** zamiast wysyłać nową.
+
+**Tryb „przypięty panel" (hybrydowy):** bot utrzymuje i edytuje stały, przypięty
+panel ze statusem, a **dodatkowo** przy każdym nowym zdarzeniu wysyła osobną
+wiadomość z pingiem roli (`{role_ping}` w treści, `allowed_mentions` ograniczone
+do wybranej roli) — żeby ludzie dostali realne powiadomienie. Po wysłaniu nowej
+bot **usuwa swoją poprzednią tymczasową** wiadomość tego samego typu (pojedynczo,
+tylko własne wiadomości zapisane w tabeli `temp_notifications` — nigdy panelu,
+nigdy wiadomości użytkowników, bez bulk-delete). Stan przeżywa restart kontenera.
+
+**Ustawienia / Klucze API:** w panelu (sekcja **Ustawienia**) możesz wpisać klucze
+API (YouTube, Twitch, TikTok SIGN) bez restartu — nadpisują zmienne środowiskowe
+i są maskowane w UI.
 
 **Anty-duplikaty:** każde obsłużone zdarzenie zapisywane jest w tabeli `seen_items`
 (trwale w SQLite), więc restart kontenera **nie powtórzy** powiadomień.

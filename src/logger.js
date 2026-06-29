@@ -40,7 +40,20 @@ function rotateStreamIfNeeded() {
     stream = null;
   }
   currentDay = today;
-  stream = fs.createWriteStream(fileForToday(), { flags: 'a' });
+  try {
+    fs.mkdirSync(config.logDir, { recursive: true });
+    stream = fs.createWriteStream(fileForToday(), { flags: 'a' });
+    // An async stream error must never crash the process; fall back to stdout.
+    stream.on('error', (err) => {
+      process.stderr.write(`[logger] file stream error: ${err.message}\n`);
+      config.logToFile = false;
+      stream = null;
+    });
+  } catch (err) {
+    process.stderr.write(`[logger] cannot open log file: ${err.message}\n`);
+    config.logToFile = false;
+    stream = null;
+  }
 }
 
 /**

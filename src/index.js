@@ -6,7 +6,8 @@ import { startWeb } from './web/server.js';
 import { startBot } from './bot/client.js';
 import { startPoller, stopPoller } from './poller.js';
 import { seedDemoData } from './db/seed.js';
-import { Events, Seen } from './store.js';
+import { applyConfigOverrides } from './runtimeSettings.js';
+import { Events, Seen, TempNotifications } from './store.js';
 
 async function main() {
   initLogging();
@@ -22,6 +23,9 @@ async function main() {
   // 1. Database + migrations.
   getDb();
   runMigrations();
+
+  // Load API-key / tunable overrides saved from the panel onto the live config.
+  applyConfigOverrides();
 
   // Optional demo data (only seeds an empty database).
   if (config.seedDemo) {
@@ -57,8 +61,9 @@ function scheduleRetention() {
     try {
       const events = Events.purgeOlderThan(days);
       const seen = Seen.purgeOlderThan(90); // keep dedupe ledger longer
-      if (events || seen) {
-        logger.info('Retention cleanup', { eventsPurged: events, seenPurged: seen });
+      const temp = TempNotifications.purgeOlderThan(30); // already-deleted rows age out
+      if (events || seen || temp) {
+        logger.info('Retention cleanup', { eventsPurged: events, seenPurged: seen, tempPurged: temp });
       }
     } catch (err) {
       logger.warn('Retention cleanup failed', { err: err.message });

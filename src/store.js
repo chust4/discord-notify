@@ -442,4 +442,45 @@ export const Seen = {
   },
 };
 
+/* ------------------------------------------------------ temp notifications */
+
+export const TempNotifications = {
+  record({ guild_id, channel_id, profile_id = null, platform = null, event_type, message_id }) {
+    return getDb()
+      .prepare(
+        `INSERT INTO temp_notifications
+         (guild_id, channel_id, profile_id, platform, event_type, message_id)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(guild_id, channel_id, profile_id, platform, event_type, message_id).lastInsertRowid;
+  },
+  /** Active (not-yet-deleted) temp notifications for the same target, newest-first. */
+  findActivePrevious({ guild_id, channel_id, profile_id, platform, event_type, excludeId = -1 }) {
+    return getDb()
+      .prepare(
+        `SELECT * FROM temp_notifications
+         WHERE guild_id = ? AND channel_id = ?
+           AND IFNULL(profile_id, -1) = IFNULL(?, -1)
+           AND IFNULL(platform, '') = IFNULL(?, '')
+           AND event_type = ?
+           AND is_deleted = 0
+           AND id <> ?
+         ORDER BY id DESC`
+      )
+      .all(guild_id, channel_id, profile_id, platform, event_type, excludeId);
+  },
+  markDeleted(id) {
+    getDb()
+      .prepare(
+        `UPDATE temp_notifications SET is_deleted = 1, deleted_at = datetime('now') WHERE id = ?`
+      )
+      .run(id);
+  },
+  purgeOlderThan(days) {
+    return getDb()
+      .prepare(`DELETE FROM temp_notifications WHERE created_at < datetime('now', ?)`)
+      .run(`-${days} days`).changes;
+  },
+};
+
 export { eventTypesForPlatform };

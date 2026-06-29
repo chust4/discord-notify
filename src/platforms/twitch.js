@@ -10,6 +10,12 @@ function hasCreds() {
   return Boolean(config.twitch.clientId && config.twitch.clientSecret);
 }
 
+/** Drop the cached app token (e.g. after credentials change in the panel). */
+export function invalidateToken() {
+  token = null;
+  tokenExpiry = 0;
+}
+
 async function getAppToken() {
   if (!hasCreds()) throw new Error('Brak TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET');
   if (token && Date.now() < tokenExpiry - 60000) return token;

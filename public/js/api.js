@@ -55,4 +55,6 @@ export const api = {
     return request('GET', `/events${q ? `?${q}` : ''}`);
   },
   runPoll: () => request('POST', '/poll/run'),
+  getConfig: () => request('GET', '/config'),
+  saveConfig: (b) => request('PUT', '/config', b),
 };

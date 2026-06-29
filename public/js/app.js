@@ -13,6 +13,7 @@ const routes = {
   servers: renderServers,
   logs: renderLogs,
   diagnostics: renderDiagnostics,
+  settings: renderSettingsPage,
 };
 
 function parseHash() {
@@ -30,6 +31,7 @@ const TITLES = {
   servers: 'Serwery Discord',
   logs: 'Logi / Historia',
   diagnostics: 'Diagnostyka',
+  settings: 'Ustawienia',
 };
 
 async function router() {
@@ -107,7 +109,6 @@ function profileCardHtml(p) {
         </div>
       </div>
       <div class="integrations">${integrations}</div>
-      ${statTilesHtml(p)}
       <div class="event-line">
         <div>🕒 Ostatnie zdarzenie: ${p.last_event_type ? `${esc(p.last_event_type)} · ${fmtDate(p.last_event_at)}` : '—'}</div>
         ${p.last_error ? `<div class="error-text">⚠️ ${esc(p.last_error)} · ${fmtDate(p.last_error_at)}</div>` : ''}
@@ -185,6 +186,9 @@ async function renderProfile({ id }) {
         <button class="btn btn-danger btn-sm" id="del-profile">🗑️ Usuń</button>
       </div>
     </div>
+
+    <div class="section-title" style="margin-top:0">📊 Statystyki powiadomień</div>
+    ${statTilesHtml(profile)}
 
     <div class="section-title">🔗 Połączone konta</div>
     <div id="accounts" class="stack"></div>
@@ -623,6 +627,72 @@ async function renderDiagnostics() {
 
 function kv(k, v) {
   return `<div class="card-row"><span class="label">${esc(k)}</span><span>${esc(v)}</span></div>`;
+}
+
+/* --------------------------------------------------------------- settings */
+const SOURCE_BADGE = {
+  panel: '<span class="chip" style="color:var(--green)">panel</span>',
+  env: '<span class="chip" style="color:var(--text-dim)">zmienna .env</span>',
+  none: '<span class="chip" style="color:var(--text-faint)">brak</span>',
+};
+
+async function renderSettingsPage() {
+  const { fields } = await api.getConfig();
+  const rows = fields
+    .map((f) => {
+      const status =
+        f.type === 'secret'
+          ? f.set
+            ? `ustawione <code>${esc(f.hint)}</code>`
+            : 'nie ustawione'
+          : '';
+      const input =
+        f.type === 'number'
+          ? `<input type="text" inputmode="numeric" data-cfg="${f.key}" value="${esc(f.value || '')}" />`
+          : f.type === 'secret'
+          ? `<input type="password" data-cfg="${f.key}" placeholder="${f.set ? 'zostaw puste, aby nie zmieniać' : 'wklej wartość'}" autocomplete="new-password" />`
+          : `<input type="text" data-cfg="${f.key}" value="${esc(f.value || '')}" />`;
+      return `
+        <label class="field">
+          <span>${esc(f.label)} ${SOURCE_BADGE[f.source] || ''}</span>
+          ${input}
+          <div class="faint" style="margin-top:4px">${esc(f.help || '')}${status ? ` · ${status}` : ''}</div>
+        </label>`;
+    })
+    .join('');
+
+  view.innerHTML = `
+    <div class="page-head"><div>
+      <h2 style="margin:0">Ustawienia / Klucze API</h2>
+      <p class="faint" style="margin:4px 0 0">Wartości z panelu nadpisują zmienne środowiskowe. Sekrety nigdy nie są pokazywane w całości.</p>
+    </div></div>
+    <div class="card" style="max-width:640px">
+      ${rows}
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="cfg-save">💾 Zapisz</button>
+        <span class="faint">Puste pole sekretu = bez zmian. Zmiany działają od razu (bez restartu).</span>
+      </div>
+    </div>
+    <p class="faint" style="margin-top:16px">ℹ️ TikTok live i nowe filmy (yt-dlp) oraz Kick nie wymagają kluczy. Interwał sprawdzania zmieniasz zmienną <code>POLL_INTERVAL_SECONDS</code> w Portainerze.</p>`;
+
+  document.getElementById('cfg-save').onclick = async (e) => {
+    const btn = e.currentTarget;
+    const body = {};
+    view.querySelectorAll('[data-cfg]').forEach((el) => {
+      if (el.value !== '') body[el.dataset.cfg] = el.value.trim();
+    });
+    if (Object.keys(body).length === 0) { toast('Nic do zapisania', 'warn'); return; }
+    btn.disabled = true;
+    try {
+      await api.saveConfig(body);
+      toast('Zapisano ustawienia', 'success');
+      renderSettingsPage();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  };
 }
 
 /* ------------------------------------------------------------ bot status poll */

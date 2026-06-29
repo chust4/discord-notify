@@ -54,8 +54,17 @@ async function checkAccount(account) {
     } else {
       log.debug('Account check error (repeat)', { account: account.identifier, error: result.error });
     }
-  } else if (account.last_error) {
-    Accounts.setError(account.id, null);
+  } else {
+    // Successful check: clear any stale account/profile error so the card stops
+    // showing an old warning, and log a clear confirmation of what we fetched.
+    if (account.last_error) Accounts.setError(account.id, null);
+    if (profile.last_error) Profiles.setLastError(profile.id, null);
+    log.info('Account checked OK', {
+      platform: account.platform,
+      account: account.identifier,
+      newEvents: (result.events || []).length,
+      live: result.state?.is_live ? true : false,
+    });
   }
 
   // Persist new state first so a crash mid-dispatch doesn't replay everything.

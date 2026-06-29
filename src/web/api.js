@@ -25,6 +25,7 @@ import { getPlatform } from '../platforms/index.js';
 import { sendTest } from '../notifications/dispatcher.js';
 import { getStatus, getClient, isReady } from '../bot/runtime.js';
 import { runOnce } from '../poller.js';
+import { describeConfig, saveOverrides } from '../runtimeSettings.js';
 
 const log = createLogger('api');
 export const apiRouter = express.Router();
@@ -298,6 +299,17 @@ apiRouter.get('/events', wrap(async (req, res) => {
       status: req.query.status || null,
     })
   );
+}));
+
+/* ----------------------------------------------------------- app settings */
+
+apiRouter.get('/config', wrap(async (_req, res) => {
+  res.json({ fields: describeConfig() });
+}));
+
+apiRouter.put('/config', wrap(async (req, res) => {
+  saveOverrides(req.body || {});
+  res.json({ ok: true, fields: describeConfig() });
 }));
 
 /* -------------------------------------------------------------- poll/manual */
