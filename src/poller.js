@@ -36,17 +36,25 @@ async function checkAccount(account) {
   }
 
   if (result.error) {
+    // Only surface an error the first time it appears (or when it changes) so a
+    // persistently failing account — e.g. TikTok scraping — doesn't flood the
+    // logs and history with an identical row every poll cycle.
+    const changed = account.last_error !== result.error;
     Accounts.setError(account.id, result.error);
     Profiles.setLastError(profile.id, `${account.platform}: ${result.error}`);
-    Events.log({
-      profile_id: profile.id,
-      account_id: account.id,
-      platform: account.platform,
-      status: EVENT_STATUS.API_ERROR,
-      detail: result.error,
-    });
-    log.warn('Account check error', { account: account.identifier, error: result.error });
-  } else {
+    if (changed) {
+      Events.log({
+        profile_id: profile.id,
+        account_id: account.id,
+        platform: account.platform,
+        status: EVENT_STATUS.API_ERROR,
+        detail: result.error,
+      });
+      log.warn('Account check error', { account: account.identifier, error: result.error });
+    } else {
+      log.debug('Account check error (repeat)', { account: account.identifier, error: result.error });
+    }
+  } else if (account.last_error) {
     Accounts.setError(account.id, null);
   }
 

@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -25,7 +26,7 @@ function isPrivileged(interaction) {
 }
 
 function ephem(content) {
-  return { content, ephemeral: true };
+  return { content, flags: MessageFlags.Ephemeral };
 }
 
 function findProfile(query) {
@@ -160,7 +161,7 @@ const handlers = {
           value: missing.length ? `❌ Brakuje: ${missing.join(', ')}` : '✅ Wszystkie wymagane obecne',
         }
       );
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 
   async status(interaction) {
@@ -179,7 +180,7 @@ const handlers = {
         { name: 'Wersja', value: config.version, inline: true },
         { name: 'Ostatnie sprawdzenie', value: String(lastCheck), inline: false }
       );
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 
   async profiles(interaction) {
@@ -195,7 +196,7 @@ const handlers = {
       .setTitle('👥 Profile twórców')
       .setColor(0x5865f2)
       .setDescription(lines.join('\n').slice(0, 4000));
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 
   async help(interaction) {
@@ -217,7 +218,7 @@ const handlers = {
           '`/help` — ta pomoc',
         ].join('\n')
       );
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 
   async test_notification(interaction) {
@@ -238,7 +239,7 @@ const handlers = {
     if (!setting) return interaction.reply(ephem('Brak konfiguracji dla tego zdarzenia.'));
     // Use the current channel if none configured.
     const target = { ...setting, channel_id: setting.channel_id || interaction.channel.id };
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const res = await sendTest(target);
     return interaction.editReply(
       res.status === 'sent' || res.status === 'panel_edited'
@@ -285,7 +286,7 @@ const handlers = {
       panel_message_id: null,
       panel_channel_id: null,
     });
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const fresh = NotificationSettings.byId(setting.id);
     const res = await sendTest({ ...fresh, channel_id: interaction.channel.id });
     return interaction.editReply(
@@ -304,7 +305,7 @@ const handlers = {
       (s) => s.event_type === eventType
     );
     if (!setting) return interaction.reply(ephem('Brak konfiguracji zdarzenia.'));
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const res = await sendTest(setting);
     return interaction.editReply(`Status: ${res.status}${res.detail ? ` — ${res.detail}` : ''}`);
   },

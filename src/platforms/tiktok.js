@@ -79,6 +79,25 @@ export async function resolve(input) {
   };
 }
 
+// Pull the newest-first list of video items from whichever embedded format
+// this particular TikTok response happens to use.
+function extractItems(data) {
+  if (!data) return [];
+  const detail = data.__DEFAULT_SCOPE__?.['webapp.user-detail'];
+  if (Array.isArray(detail?.itemList) && detail.itemList.length) return detail.itemList;
+  // Legacy SIGI_STATE: ItemModule is an object keyed by video id.
+  if (data.ItemModule && typeof data.ItemModule === 'object') {
+    return Object.values(data.ItemModule).sort(
+      (a, b) => Number(b.createTime || 0) - Number(a.createTime || 0)
+    );
+  }
+  const ids = data.ItemList?.['user-post']?.list;
+  if (Array.isArray(ids) && ids.length) {
+    return ids.map((id) => data.ItemModule?.[id] || id).filter(Boolean);
+  }
+  return [];
+}
+
 export async function check(account) {
   const events = [];
   const state = {
@@ -95,18 +114,19 @@ export async function check(account) {
   }
 
   const data = extractUniversalData(html);
-  const itemList =
-    data?.__DEFAULT_SCOPE__?.['webapp.user-detail']?.itemList ||
-    data?.ItemList?.['user-post']?.list ||
-    [];
-
-  // Newest first.
-  const items = Array.isArray(itemList) ? itemList : [];
+  const items = extractItems(data);
   const latest = items[0];
   const latestId = typeof latest === 'string' ? latest : latest?.id;
 
   if (!latestId) {
-    return { events, state, error: 'TikTok: nie udało się odczytać listy filmów' };
+    // TikTok renders the video list client-side via a signed API call, so the
+    // server HTML often has no items (especially from a datacenter/NAS IP).
+    // This is a known best-effort limitation, not a misconfiguration.
+    return {
+      events,
+      state,
+      error: 'TikTok: lista filmów niedostępna ze strony (ograniczenie TikToka — patrz README)',
+    };
   }
 
   if (!account.last_video_id) {

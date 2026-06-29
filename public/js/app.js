@@ -148,9 +148,9 @@ async function renderProfile({ id }) {
         </div>
       </div>
       <div class="row">
-        <label class="row" style="gap:8px"><span class="faint">Aktywny</span>
-          <span class="switch"><input type="checkbox" id="prof-enabled" ${profile.enabled ? 'checked' : ''}><span class="slider"></span></span>
-        </label>
+        <div class="row" style="gap:8px"><span class="faint">Aktywny</span>
+          <label class="switch"><input type="checkbox" id="prof-enabled" ${profile.enabled ? 'checked' : ''}><span class="slider"></span></label>
+        </div>
         <button class="btn btn-danger btn-sm" id="del-profile">🗑️ Usuń</button>
       </div>
     </div>
@@ -185,11 +185,23 @@ async function renderProfile({ id }) {
   renderAccounts(profile);
 
   const guildSelect = document.getElementById('guild-select');
-  guildSelect.onchange = () => renderSettings(id, guildSelect.value);
-  if (guilds.filter((g) => g.authorized).length === 1) {
-    const only = guilds.find((g) => g.authorized);
-    guildSelect.value = only.guild_id;
-    renderSettings(id, only.guild_id);
+  const lsKey = `dn:lastGuild:${id}`;
+  guildSelect.onchange = () => {
+    if (guildSelect.value) localStorage.setItem(lsKey, guildSelect.value);
+    else localStorage.removeItem(lsKey);
+    renderSettings(id, guildSelect.value);
+  };
+
+  // Re-select the previously chosen server (survives page refresh), else
+  // auto-select when there is exactly one authorized server.
+  const remembered = localStorage.getItem(lsKey);
+  const authorized = guilds.filter((g) => g.authorized);
+  let preselect = null;
+  if (remembered && guilds.some((g) => g.guild_id === remembered)) preselect = remembered;
+  else if (authorized.length === 1) preselect = authorized[0].guild_id;
+  if (preselect) {
+    guildSelect.value = preselect;
+    renderSettings(id, preselect);
   }
 }
 
@@ -311,7 +323,7 @@ function eventRowHtml(s, channels, roles) {
   return `
     <div class="event-row" data-setting-id="${s.id}" data-event-type="${s.event_type}">
       <div class="event-row-head">
-        <span class="switch"><input type="checkbox" data-field="enabled" ${s.enabled ? 'checked' : ''}><span class="slider"></span></span>
+        <label class="switch"><input type="checkbox" data-field="enabled" ${s.enabled ? 'checked' : ''}><span class="slider"></span></label>
         <span class="event-row-title">${esc(s.eventLabel || s.event_type)}</span>
         <span class="spacer"></span>
         <button class="expand-toggle" data-toggle>⚙️ ustawienia ▾</button>
@@ -462,10 +474,10 @@ async function renderServers() {
             <div style="font-weight:600">${esc(g.name || 'Nieznany serwer')}</div>
             <div class="faint">ID: ${esc(g.guild_id)} · ${g.member_count || '?'} członków</div>
           </div>
-          <label class="row" style="gap:8px">
+          <div class="row" style="gap:8px">
             <span class="faint">${g.authorized ? 'Autoryzowany' : 'Zablokowany'}</span>
-            <span class="switch"><input type="checkbox" data-guild="${g.guild_id}" ${g.authorized ? 'checked' : ''}><span class="slider"></span></span>
-          </label>
+            <label class="switch"><input type="checkbox" data-guild="${g.guild_id}" ${g.authorized ? 'checked' : ''}><span class="slider"></span></label>
+          </div>
         </div>`
         )
         .join('')
