@@ -1,28 +1,56 @@
 const DEFAULT_UA =
   'Mozilla/5.0 (compatible; DiscordNotifyBot/1.0; +https://github.com/chust4/discord-notify)';
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * fetch with a timeout and a sane default User-Agent. Throws on non-2xx unless
- * `allowStatuses` includes the status code.
+ * fetch with a timeout, a sane default User-Agent and automatic retries on
+ * transient failures (network errors, timeouts, HTTP 429/5xx). Throws on a
+ * non-2xx final response unless `allowStatuses` includes the status code.
+ *
+ * YouTube's RSS feed endpoint in particular returns sporadic HTTP 500s; a
+ * couple of short retries make these invisible instead of logging an error.
  */
-export async function httpGet(url, { headers = {}, timeoutMs = 15000, allowStatuses = [] } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': DEFAULT_UA, Accept: '*/*', ...headers },
-      signal: controller.signal,
-    });
-    if (!res.ok && !allowStatuses.includes(res.status)) {
-      const body = await res.text().catch(() => '');
-      const err = new Error(`HTTP ${res.status} for ${url}: ${body.slice(0, 200)}`);
-      err.status = res.status;
+export async function httpGet(
+  url,
+  { headers = {}, timeoutMs = 15000, allowStatuses = [], retries = 2, retryDelayMs = 800 } = {}
+) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': DEFAULT_UA, Accept: '*/*', ...headers },
+        signal: controller.signal,
+      });
+      if (!res.ok && !allowStatuses.includes(res.status)) {
+        const transient = res.status === 429 || res.status >= 500;
+        if (transient && attempt < retries) {
+          await sleep(retryDelayMs * (attempt + 1));
+          continue;
+        }
+        // Don't dump the (usually HTML) error page into logs — just a snippet.
+        const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 120);
+        const err = new Error(`HTTP ${res.status} for ${url}${body ? ` — ${body}` : ''}`);
+        err.status = res.status;
+        throw err;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      const networkish = err.name === 'AbortError' || err.name === 'TypeError' || Boolean(err.cause);
+      const retriableStatus = err.status === 429 || (err.status >= 500 && err.status < 600);
+      if (attempt < retries && (networkish || retriableStatus)) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
       throw err;
+    } finally {
+      clearTimeout(timer);
     }
-    return res;
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastErr;
 }
 
 export async function httpGetJson(url, opts) {
