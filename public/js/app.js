@@ -146,6 +146,66 @@ function statTilesHtml(p) {
     </div>`;
 }
 
+const MODE_DESC = {
+  message: 'Zwykła wiadomość na czacie. Każde zdarzenie = nowa wiadomość. Pinguje, jeśli ustawisz rolę.',
+  embed: 'Ładny embed Discord + opcjonalny ping w treści. Każde zdarzenie = nowa wiadomość.',
+  panel: 'Bot edytuje JEDNĄ wiadomość w miejscu (tablica statusu). Cicho — bez pingu, bez przypięcia, bez osobnych powiadomień.',
+  pinned_panel: 'Hybryda: przypięty panel ze statusem (edytowany na bieżąco) + przy każdym zdarzeniu OSOBNA wiadomość z pingiem roli. Poprzednia tymczasowa wiadomość jest kasowana, panel zostaje.',
+};
+
+const VAR_DESC = {
+  creator_name: 'Nazwa twórcy / konta',
+  platform: 'YouTube / TikTok / Twitch / Kick',
+  title: 'Tytuł filmu lub transmisji',
+  url: 'Link do materiału',
+  thumbnail_url: 'Adres miniatury',
+  published_at: 'Data publikacji / startu',
+  duration: 'Długość filmu (jeśli dostępna)',
+  viewer_count: 'Liczba widzów (dla live)',
+  category: 'Kategoria / gra (Twitch, Kick)',
+  guild_name: 'Nazwa serwera Discord',
+  channel_name: 'Nazwa kanału Discord',
+  role_ping: 'Wstawia ping wybranej roli (@rola / @everyone)',
+};
+
+function legendHtml() {
+  const modes = (META.modes || [])
+    .map((m) => `<li><b>${esc(m.label)}</b><br><span class="faint">${esc(MODE_DESC[m.key] || '')}</span></li>`)
+    .join('');
+  const vars = (META.templateVariables || [])
+    .map((v) => `<li><code>{${v}}</code> — <span class="faint">${esc(VAR_DESC[v] || '')}</span></li>`)
+    .join('');
+  const events = (META.eventTypes || [])
+    .map((e) => `<li><b>${esc(e.label)}</b></li>`)
+    .join('');
+  return `
+    <div class="legend">
+      <div class="legend-title">📖 Legenda</div>
+      <details open>
+        <summary>Tryby wysyłki</summary>
+        <ul class="legend-list">${modes}</ul>
+      </details>
+      <details>
+        <summary>Zmienne szablonów</summary>
+        <ul class="legend-list">${vars}</ul>
+      </details>
+      <details>
+        <summary>Typy zdarzeń</summary>
+        <ul class="legend-list">${events}</ul>
+        <p class="faint" style="margin:8px 0 0">YouTube: film krótszy niż ${META.youtubeShortMaxSeconds || 180}s = <b>Short</b>, równy/dłuższy = zwykły film.</p>
+      </details>
+      <details>
+        <summary>Dobre praktyki</summary>
+        <ul class="legend-list">
+          <li>Serwer musi być <b>autoryzowany</b> (sekcja Serwery).</li>
+          <li>Bot potrzebuje na kanale: <i>Wyświetlanie, Wysyłanie, Embed Links</i>; dla panelu też <i>Manage Messages</i>.</li>
+          <li><code>{role_ping}</code> w szablonie = realny ping. Pinguje tylko wybrana rola.</li>
+          <li>Przycisk „Wyślij test" nie liczy się do statystyk.</li>
+        </ul>
+      </details>
+    </div>`;
+}
+
 function addProfileDialog() {
   modal({
     title: 'Nowy profil',
@@ -187,27 +247,42 @@ async function renderProfile({ id }) {
       </div>
     </div>
 
-    <div class="section-title" style="margin-top:0">📊 Statystyki powiadomień</div>
-    ${statTilesHtml(profile)}
+    <div class="profile-layout">
+      <div class="profile-main">
+        <div class="section-title" style="margin-top:0">
+          📊 Statystyki powiadomień
+          <button class="btn btn-ghost btn-sm" id="reset-stats" style="float:right" title="Wyzeruj liczniki (nie kasuje historii)">♻️ Resetuj</button>
+        </div>
+        <div id="stats-tiles">${statTilesHtml(profile)}</div>
 
-    <div class="section-title">🔗 Połączone konta</div>
-    <div id="accounts" class="stack"></div>
+        <div class="section-title">🔗 Połączone konta</div>
+        <div id="accounts" class="stack"></div>
 
-    <div class="section-title">🔔 Powiadomienia per serwer</div>
-    <div class="card">
-      <label class="field" style="margin:0">
-        <span>Wybierz serwer Discord</span>
-        <select id="guild-select">
-          <option value="">— wybierz serwer —</option>
-          ${guilds.map((g) => `<option value="${g.guild_id}">${esc(g.name || g.guild_id)} ${g.authorized ? '' : '(nieautoryzowany)'}</option>`).join('')}
-        </select>
-      </label>
-    </div>
-    <div id="settings-area" style="margin-top:16px"></div>`;
+        <div class="section-title">🔔 Powiadomienia per serwer</div>
+        <div class="card">
+          <label class="field" style="margin:0">
+            <span>Wybierz serwer Discord</span>
+            <select id="guild-select">
+              <option value="">— wybierz serwer —</option>
+              ${guilds.map((g) => `<option value="${g.guild_id}">${esc(g.name || g.guild_id)} ${g.authorized ? '' : '(nieautoryzowany)'}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <div id="settings-area" style="margin-top:16px"></div>
+      </div>
+      <aside class="profile-aside">${legendHtml()}</aside>
+    </div>`;
 
   document.getElementById('prof-enabled').onchange = async (e) => {
     await api.updateProfile(id, { enabled: e.target.checked });
     toast('Zapisano', 'success');
+  };
+  document.getElementById('reset-stats').onclick = async () => {
+    if (await confirmDialog('Reset statystyk', 'Wyzerować liczniki powiadomień tego profilu? Historia zdarzeń zostaje nienaruszona.', 'Resetuj')) {
+      const res = await api.resetStats(id);
+      document.getElementById('stats-tiles').innerHTML = statTilesHtml({ ...profile, stats: res.stats });
+      toast('Statystyki zresetowane', 'success');
+    }
   };
   document.getElementById('del-profile').onclick = async () => {
     if (await confirmDialog('Usuń profil', `Na pewno usunąć „${profile.name}”? Tej operacji nie można cofnąć.`)) {
@@ -636,6 +711,12 @@ const SOURCE_BADGE = {
   none: '<span class="chip" style="color:var(--text-faint)">brak</span>',
 };
 
+const REQ_BADGE = {
+  'required-twitch': '<span class="req-badge req-req">Wymagane dla Twitch</span>',
+  optional: '<span class="req-badge req-opt">Opcjonalne</span>',
+  setting: '<span class="req-badge req-set">Ustawienie</span>',
+};
+
 async function renderSettingsPage() {
   const { fields } = await api.getConfig();
   const rows = fields
@@ -654,7 +735,7 @@ async function renderSettingsPage() {
           : `<input type="text" data-cfg="${f.key}" value="${esc(f.value || '')}" />`;
       return `
         <label class="field">
-          <span>${esc(f.label)} ${SOURCE_BADGE[f.source] || ''}</span>
+          <span>${esc(f.label)} ${REQ_BADGE[f.requirement] || ''} ${SOURCE_BADGE[f.source] || ''}</span>
           ${input}
           <div class="faint" style="margin-top:4px">${esc(f.help || '')}${status ? ` · ${status}` : ''}</div>
         </label>`;
@@ -666,6 +747,17 @@ async function renderSettingsPage() {
       <h2 style="margin:0">Ustawienia / Klucze API</h2>
       <p class="faint" style="margin:4px 0 0">Wartości z panelu nadpisują zmienne środowiskowe. Sekrety nigdy nie są pokazywane w całości.</p>
     </div></div>
+
+    <div class="card" style="max-width:640px;border-color:var(--accent);margin-bottom:16px">
+      <b>🔑 Token bota Discord</b>
+      <p class="faint" style="margin:6px 0 0">
+        <span class="req-badge req-req">Wymagane</span>
+        <code>DISCORD_TOKEN</code> i <code>DISCORD_CLIENT_ID</code> ustawiasz w <b>Portainerze</b>
+        (zmienne środowiskowe stacku), nie tutaj — bez nich bot się nie zaloguje.
+        Poniższe pola to klucze platform, które możesz zmieniać na bieżąco.
+      </p>
+    </div>
+
     <div class="card" style="max-width:640px">
       ${rows}
       <div class="row" style="margin-top:6px">

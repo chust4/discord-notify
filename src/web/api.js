@@ -179,6 +179,13 @@ apiRouter.delete('/profiles/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+apiRouter.post('/profiles/:id/stats/reset', wrap(async (req, res) => {
+  const profile = Profiles.byId(Number(req.params.id));
+  if (!profile) return res.status(404).json({ error: 'Nie znaleziono profilu' });
+  const at = Events.resetStats(profile.id);
+  res.json({ ok: true, resetAt: at, stats: Events.statsForProfile(profile.id) });
+}));
+
 /* ---------------------------------------------------------------- accounts */
 
 apiRouter.post('/profiles/:id/accounts', wrap(async (req, res) => {

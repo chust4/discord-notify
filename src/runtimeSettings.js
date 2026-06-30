@@ -8,11 +8,31 @@ const log = createLogger('config:runtime');
 // API credentials / tunables that can be set from the web panel. Values are
 // stored in the settings table under `cfg.<key>` and override the env defaults.
 export const MANAGED_FIELDS = [
-  { key: 'youtube_api_key', label: 'YouTube Data API Key', type: 'secret', help: 'Avatary YouTube + rozróżnianie Shorts/live' },
-  { key: 'twitch_client_id', label: 'Twitch Client ID', type: 'text', help: 'Wykrywanie live na Twitch' },
-  { key: 'twitch_client_secret', label: 'Twitch Client Secret', type: 'secret', help: 'Wykrywanie live na Twitch' },
-  { key: 'sign_api_key', label: 'TikTok SIGN_API_KEY (EulerStream)', type: 'secret', help: 'Opcjonalny — tylko limity TikTok live' },
-  { key: 'youtube_short_max_seconds', label: 'YouTube Shorts: maks. długość (s)', type: 'number', help: 'Film krótszy = Short' },
+  {
+    key: 'youtube_api_key', label: 'YouTube Data API Key', type: 'secret',
+    requirement: 'optional',
+    help: 'Opcjonalny. Bez niego nowe filmy YouTube i tak działają (RSS). Klucz dodaje avatary oraz rozróżnianie Shorts vs film i wykrywanie YouTube live.',
+  },
+  {
+    key: 'twitch_client_id', label: 'Twitch Client ID', type: 'text',
+    requirement: 'required-twitch',
+    help: 'Wymagany, jeśli śledzisz Twitch — bez niego wykrywanie live na Twitch nie działa.',
+  },
+  {
+    key: 'twitch_client_secret', label: 'Twitch Client Secret', type: 'secret',
+    requirement: 'required-twitch',
+    help: 'Wymagany, jeśli śledzisz Twitch — razem z Client ID. Bez niego brak wykrywania Twitch live.',
+  },
+  {
+    key: 'sign_api_key', label: 'TikTok SIGN_API_KEY (EulerStream)', type: 'secret',
+    requirement: 'optional',
+    help: 'Opcjonalny. TikTok live i nowe filmy (yt-dlp) działają bez niego — klucz tylko zwiększa limity zapytań TikTok live.',
+  },
+  {
+    key: 'youtube_short_max_seconds', label: 'YouTube Shorts: maks. długość (s)', type: 'number',
+    requirement: 'setting',
+    help: 'To ustawienie, nie klucz API. Film krótszy niż ta wartość = Short, równy/dłuższy = zwykły film.',
+  },
 ];
 
 const skey = (k) => `cfg.${k}`;
@@ -100,6 +120,7 @@ export function describeConfig() {
       label: f.label,
       type: f.type,
       help: f.help,
+      requirement: f.requirement || 'optional',
       source: dbVal != null && dbVal !== '' ? 'panel' : eff ? 'env' : 'none',
       set: Boolean(eff),
     };

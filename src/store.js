@@ -375,18 +375,25 @@ export const Events = {
       .all(limit);
   },
   /**
-   * At-a-glance stats for a profile card: notifications delivered per platform,
-   * total delivered, detected events and failures.
+   * At-a-glance stats for a profile: notifications delivered per platform,
+   * total delivered, detected events and failures. Test sends (detail prefixed
+   * "TEST:") are excluded, and counting starts after the last manual reset.
    */
   statsForProfile(profile_id) {
     const db = getDb();
+    // Reset baseline stored in the same datetime() format as events.created_at
+    // so string comparison is correct.
+    const resetAt = Settings.get(`stats_reset.${profile_id}`) || '1970-01-01 00:00:00';
+    const NOT_TEST = `(detail IS NULL OR detail NOT LIKE 'TEST:%')`;
+
     const sentRows = db
       .prepare(
         `SELECT platform, COUNT(*) AS c FROM events
-         WHERE profile_id = ? AND status IN ('sent','panel_edited')
+         WHERE profile_id = @pid AND status IN ('sent','panel_edited')
+           AND created_at > @resetAt AND ${NOT_TEST}
          GROUP BY platform`
       )
-      .all(profile_id);
+      .all({ pid: profile_id, resetAt });
     const sentByPlatform = {};
     let totalSent = 0;
     for (const r of sentRows) {
@@ -395,16 +402,25 @@ export const Events = {
     }
     const detected = db
       .prepare(
-        `SELECT COUNT(*) AS c FROM events WHERE profile_id = ? AND status = 'detected'`
+        `SELECT COUNT(*) AS c FROM events
+         WHERE profile_id = @pid AND status = 'detected'
+           AND created_at > @resetAt AND ${NOT_TEST}`
       )
-      .get(profile_id).c;
+      .get({ pid: profile_id, resetAt }).c;
     const failed = db
       .prepare(
         `SELECT COUNT(*) AS c FROM events
-         WHERE profile_id = ? AND status IN ('api_error','no_permission','send_failed')`
+         WHERE profile_id = @pid AND status IN ('api_error','no_permission','send_failed')
+           AND created_at > @resetAt AND ${NOT_TEST}`
       )
-      .get(profile_id).c;
+      .get({ pid: profile_id, resetAt }).c;
     return { sentByPlatform, totalSent, detected, failed };
+  },
+  /** Reset a profile's notification counters (keeps history rows). */
+  resetStats(profile_id) {
+    const t = getDb().prepare("SELECT datetime('now') AS t").get().t;
+    Settings.set(`stats_reset.${profile_id}`, t);
+    return t;
   },
   /** Delete history rows older than the retention window. */
   purgeOlderThan(days) {

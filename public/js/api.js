@@ -35,6 +35,7 @@ export const api = {
   createProfile: (b) => request('POST', '/profiles', b),
   updateProfile: (id, b) => request('PATCH', `/profiles/${id}`, b),
   deleteProfile: (id) => request('DELETE', `/profiles/${id}`),
+  resetStats: (id) => request('POST', `/profiles/${id}/stats/reset`),
   addAccount: (id, b) => request('POST', `/profiles/${id}/accounts`, b),
   refreshAccount: (accId) => request('POST', `/accounts/${accId}/refresh`),
   deleteAccount: (accId) => request('DELETE', `/accounts/${accId}`),
