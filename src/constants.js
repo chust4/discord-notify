@@ -1,12 +1,13 @@
 // Central definitions shared by the bot, web API and frontend.
 
-export const PLATFORMS = ['youtube', 'tiktok', 'twitch', 'kick'];
+export const PLATFORMS = ['youtube', 'tiktok', 'twitch', 'kick', 'instagram'];
 
 export const PLATFORM_LABELS = {
   youtube: 'YouTube',
   tiktok: 'TikTok',
   twitch: 'Twitch',
   kick: 'Kick',
+  instagram: 'Instagram',
 };
 
 export const NOTIFICATION_MODES = ['message', 'embed', 'panel', 'pinned_panel'];
@@ -35,6 +36,9 @@ export const EVENT_TYPES = [
   { key: 'twitch_live_end', platform: 'twitch', label: 'Twitch live end', live: true },
   { key: 'kick_live_start', platform: 'kick', label: 'Kick live start', live: true },
   { key: 'kick_live_end', platform: 'kick', label: 'Kick live end', live: true },
+  { key: 'instagram_post', platform: 'instagram', label: 'Instagram nowy post', live: false, requiresSession: true },
+  { key: 'instagram_reel', platform: 'instagram', label: 'Instagram Reels', live: false, requiresSession: true },
+  { key: 'instagram_story', platform: 'instagram', label: 'Instagram Stories', live: false, requiresSession: true, experimental: true },
 ];
 
 export const EVENT_TYPE_KEYS = EVENT_TYPES.map((e) => e.key);
@@ -99,6 +103,12 @@ export const DEFAULT_TEMPLATES = {
     '🟢 **{creator_name}** rozpoczął transmisję na Kick!\n**{title}**\n🎮 {category}\n{url} {role_ping}',
   kick_live_end:
     '⚫ **{creator_name}** zakończył transmisję na Kick.',
+  instagram_post:
+    '🖼️ **{creator_name}** dodał nowy post na Instagramie!\n**{title}**\n{url} {role_ping}',
+  instagram_reel:
+    '🎞️ **{creator_name}** dodał nowego Reelsa!\n**{title}**\n{url} {role_ping}',
+  instagram_story:
+    '⭐ **{creator_name}** dodał nowe Story na Instagramie!\n{url} {role_ping}',
 };
 
 // Status values used in the events / history table.

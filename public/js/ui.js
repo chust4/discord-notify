@@ -102,6 +102,7 @@ export const PLATFORM_ICON = {
   tiktok: '🎵',
   twitch: '🎮',
   kick: '🥊',
+  instagram: '📸',
 };
 
 export function avatarHtml(url, name, cls = '') {

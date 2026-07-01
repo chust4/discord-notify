@@ -97,6 +97,14 @@ export const config = {
     // only improves rate limits, not required for fetchIsLive().
     signApiKey: process.env.SIGN_API_KEY || '',
   },
+  instagram: {
+    // Instagram's post/reel listing (and all of Stories) requires an
+    // authenticated session — there is no anonymous API. This is the
+    // `sessionid` cookie value from a logged-in Instagram session. Strongly
+    // recommend a dedicated/throwaway account: automating a session this way
+    // is against Instagram's ToS and risks that account being restricted.
+    sessionId: process.env.INSTAGRAM_SESSION_ID || '',
+  },
 
   // yt-dlp powers reliable TikTok new-video detection (and is reusable for
   // other platforms). Disable to fall back to HTML scraping.

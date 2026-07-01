@@ -202,6 +202,7 @@ function legendHtml() {
           <li><code>{role_ping}</code> w szablonie = realny ping. Pinguje tylko wybrana rola.</li>
           <li>Przycisk „Wyślij test" nie liczy się do statystyk.</li>
           <li>„Reakcja po wysłaniu" dodaje wybrane emoji pod wysłaną wiadomością (domyślnie ❤️). Bot potrzebuje uprawnienia <i>Add Reactions</i> na kanale.</li>
+          <li><b>Instagram</b> wymaga cookie sesji (sekcja Ustawienia) — bez niego posty/Reels/Stories nie będą wykrywane. Stories to funkcja eksperymentalna.</li>
         </ul>
       </details>
     </div>`;
@@ -400,6 +401,7 @@ function placeholderFor(platform) {
     tiktok: 'https://tiktok.com/@nazwa  lub  @nazwa',
     twitch: 'https://twitch.tv/nazwa  lub  nazwa',
     kick: 'https://kick.com/nazwa  lub  nazwa',
+    instagram: 'https://instagram.com/nazwa  lub  @nazwa',
   }[platform] || '';
 }
 
@@ -746,6 +748,7 @@ const SOURCE_BADGE = {
 
 const REQ_BADGE = {
   'required-twitch': '<span class="req-badge req-req">Wymagane dla Twitch</span>',
+  'required-instagram': '<span class="req-badge req-req">Wymagane dla Instagrama</span>',
   optional: '<span class="req-badge req-opt">Opcjonalne</span>',
   setting: '<span class="req-badge req-set">Ustawienie</span>',
 };
@@ -788,6 +791,17 @@ async function renderSettingsPage() {
         <code>DISCORD_TOKEN</code> i <code>DISCORD_CLIENT_ID</code> ustawiasz w <b>Portainerze</b>
         (zmienne środowiskowe stacku), nie tutaj — bez nich bot się nie zaloguje.
         Poniższe pola to klucze platform, które możesz zmieniać na bieżąco.
+      </p>
+    </div>
+
+    <div class="card" style="max-width:640px;border-color:var(--yellow);margin-bottom:16px">
+      <b>⚠️ Instagram — ryzyko konta</b>
+      <p class="faint" style="margin:6px 0 0">
+        Instagram nie ma publicznego API do tego celu — wykrywanie postów/Reels/Stories wymaga
+        cookie <code>sessionid</code> z zalogowanej sesji. To automatyzacja konta, która
+        <b>łamie regulamin Instagrama</b> i grozi jego ograniczeniem/banem. Użyj
+        <b>dedykowanego, zapasowego konta</b>, nigdy głównego. Cookie możesz wkleić ręcznie
+        poniżej albo zautomatyzować wtyczką z folderu <code>browser-extension/</code> w repo.
       </p>
     </div>
 

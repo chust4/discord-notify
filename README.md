@@ -1,7 +1,7 @@
 # 🔔 Discord Notify
 
-Panel webowy + bot Discord do powiadamiania o **nowych filmach i transmisjach live**
-z **YouTube, TikTok, Twitch i Kick**. Zaprojektowany do uruchomienia na **Synology NAS**
+Panel webowy + bot Discord do powiadamiania o **nowych filmach, postach i transmisjach live**
+z **YouTube, TikTok, Twitch, Kick i Instagrama**. Zaprojektowany do uruchomienia na **Synology NAS**
 przez **Portainer → Stacks → Add stack → Git repository**.
 
 - 🌐 Nowoczesny, responsywny panel (dark mode) pod `http://192.168.0.32:8092`
@@ -207,6 +207,7 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 | **Twitch** | Tak (`TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET`) | Wykrywanie **live start/end**, avatar, kategoria, liczba widzów. |
 | **Kick** | Nie | Publiczne API — live start/end, avatar (best-effort). |
 | **TikTok** | Nie (opcjonalnie `SIGN_API_KEY`) | **LIVE** przez `tiktok-live-connector` (node'owy odpowiednik [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive)). **Nowe filmy** przez wbudowany **yt-dlp** (`YTDLP_ENABLED=true`), z fallbackiem do scrapingu. |
+| **Instagram** | **Tak** (`INSTAGRAM_SESSION_ID`) ⚠️ | Instagram **nie ma** darmowego publicznego API do tego celu. Posty/Reels/Stories wymagają cookie zalogowanej sesji — bez niego wykrywanie w ogóle się nie uruchomi. |
 
 - **YouTube API key:** Google Cloud Console → włącz *YouTube Data API v3* → utwórz *API key*.
 - **Twitch:** <https://dev.twitch.tv/console/apps> → *Register Your Application* →
@@ -214,6 +215,17 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 - **TikTok LIVE:** działa od razu (`TIKTOK_LIVE_ENABLED=true`). Jeśli trafisz na
   limity zapytań, załóż darmowy klucz na <https://www.eulerstream.com> i ustaw
   `SIGN_API_KEY`. Uwaga: biblioteka wykrywa **transmisje live**, nie nowe filmy.
+- **Instagram — ⚠️ przeczytaj przed użyciem:** wklej cookie `sessionid` z
+  zalogowanej sesji Instagram w panelu → **Ustawienia** (pole „Instagram
+  Session ID"), albo zainstaluj wtyczkę Firefox z folderu
+  [`browser-extension/`](browser-extension/README.md), która robi to
+  automatycznie za każdym razem, gdy przeglądasz `instagram.com`. **To jest
+  automatyzacja konta i łamie regulamin Instagrama** — realne ryzyko
+  ograniczenia/bana tego konta. Użyj **dedykowanego, zapasowego konta**, nigdy
+  głównego. Stories to funkcja eksperymentalna (zależna od stabilności
+  ekstraktorów `yt-dlp` dla Instagrama, które bywają niestabilne nawet z
+  poprawną sesją — Dockerfile zawsze instaluje najnowszą wersję `yt-dlp` przy
+  budowaniu obrazu, więc rebuild może naprawić chwilowe problemy).
 
 ---
 

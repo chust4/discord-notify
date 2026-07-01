@@ -16,6 +16,7 @@
   --tiktok: #00f2ea;
   --twitch: #9146ff;
   --kick: #53fc18;
+  --instagram: #E1306C;
   --radius: 14px;
   --radius-sm: 9px;
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
@@ -136,6 +137,7 @@ button { font-family: inherit; }
 .chip.tiktok { color: var(--tiktok); }
 .chip.twitch { color: var(--twitch); }
 .chip.kick { color: var(--kick); }
+.chip.instagram { color: var(--instagram); }
 .chip .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 
@@ -161,6 +163,7 @@ button { font-family: inherit; }
 .mini-tile.tiktok .mini-val { color: var(--tiktok); }
 .mini-tile.twitch .mini-val { color: var(--twitch); }
 .mini-tile.kick .mini-val { color: var(--kick); }
+.mini-tile.instagram .mini-val { color: var(--instagram); }
 
 .account-link { color: var(--text); display: inline-block; text-decoration: none; }
 .account-link:hover { color: var(--accent); }

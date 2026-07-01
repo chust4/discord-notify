@@ -33,6 +33,11 @@ export const MANAGED_FIELDS = [
     requirement: 'setting',
     help: 'To ustawienie, nie klucz API. Film krótszy niż ta wartość = Short, równy/dłuższy = zwykły film.',
   },
+  {
+    key: 'instagram_session_id', label: 'Instagram Session ID (cookie)', type: 'secret',
+    requirement: 'required-instagram',
+    help: 'Wymagany dla Instagrama (posty/Reels/Stories) — Instagram nie ma publicznego API. Wklej cookie "sessionid" z zalogowanej sesji. ⚠️ Użyj DEDYKOWANEGO/zapasowego konta, nie głównego — automatyzacja sesji łamie regulamin Instagrama i grozi ograniczeniem konta. Zobacz browser-extension/ w repo, by ustawiać to automatycznie.',
+  },
 ];
 
 const skey = (k) => `cfg.${k}`;
@@ -58,6 +63,9 @@ function applyOne(key, value) {
       if (Number.isFinite(n) && n > 0) config.youtubeShortMaxSeconds = n;
       break;
     }
+    case 'instagram_session_id':
+      config.instagram.sessionId = value;
+      break;
   }
 }
 
@@ -68,6 +76,7 @@ function effective(key) {
     case 'twitch_client_secret': return config.twitch.clientSecret;
     case 'sign_api_key': return config.tiktok.signApiKey;
     case 'youtube_short_max_seconds': return String(config.youtubeShortMaxSeconds);
+    case 'instagram_session_id': return config.instagram.sessionId;
     default: return '';
   }
 }

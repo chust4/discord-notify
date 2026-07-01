@@ -76,8 +76,13 @@ function buildEmbed(event, context, profile, account) {
 
 function colorFor(platform) {
   return (
-    { youtube: 0xff0000, tiktok: 0x00f2ea, twitch: 0x9146ff, kick: 0x53fc18 }[platform] ||
-    0x5865f2
+    {
+      youtube: 0xff0000,
+      tiktok: 0x00f2ea,
+      twitch: 0x9146ff,
+      kick: 0x53fc18,
+      instagram: 0xe1306c,
+    }[platform] || 0x5865f2
   );
 }
 

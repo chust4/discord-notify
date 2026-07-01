@@ -61,6 +61,9 @@ services:
       SIGN_API_KEY: ${SIGN_API_KEY:-}
       # yt-dlp powers TikTok new-video detection (bundled in the image).
       YTDLP_ENABLED: ${YTDLP_ENABLED:-true}
+      # Instagram REQUIRES a logged-in session cookie — no free public API
+      # exists. See README section 7 for the ToS/ban-risk warning.
+      INSTAGRAM_SESSION_ID: ${INSTAGRAM_SESSION_ID:-}
 
       # Optional Basic-Auth for the web panel (recommended on a LAN)
       PANEL_USER: ${PANEL_USER:-}

@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
 
@@ -61,9 +64,13 @@ export async function isAvailable() {
 /**
  * Return a flat playlist (newest-first) of a channel/profile URL.
  * Each entry: { id, title, url, timestamp, duration, thumbnails }.
+ * `cookies` (optional) is a map of {name: value} sent as a Netscape-format
+ * cookie file to yt-dlp — used for sites (e.g. Instagram) that require an
+ * authenticated session to list content.
  */
-export async function flatPlaylist(url, { limit = 12 } = {}) {
-  const out = await run([
+export async function flatPlaylist(url, { limit = 12, cookies = null } = {}) {
+  let cookieFile = null;
+  const args = [
     '--flat-playlist',
     '--dump-single-json',
     '--no-warnings',
@@ -71,9 +78,34 @@ export async function flatPlaylist(url, { limit = 12 } = {}) {
     '--ignore-errors',
     '--playlist-end',
     String(limit),
-    url,
-  ]);
-  const data = JSON.parse(out);
-  const entries = Array.isArray(data.entries) ? data.entries : [];
-  return entries.filter((e) => e && e.id);
+  ];
+  try {
+    if (cookies && Object.keys(cookies).length) {
+      cookieFile = writeNetscapeCookieFile(cookies);
+      args.push('--cookies', cookieFile);
+    }
+    args.push(url);
+    const out = await run(args);
+    const data = JSON.parse(out);
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    return entries.filter((e) => e && e.id);
+  } finally {
+    if (cookieFile) fs.rm(cookieFile, { force: true }, () => {});
+  }
+}
+
+/**
+ * Write a throwaway Netscape-format cookie file (the format yt-dlp/curl
+ * expect via --cookies) for the given domain + {name: value} map. Caller is
+ * responsible for deleting the returned path when done.
+ */
+function writeNetscapeCookieFile(cookies, domain = '.instagram.com') {
+  const expiry = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // 1 year
+  const lines = ['# Netscape HTTP Cookie File'];
+  for (const [name, value] of Object.entries(cookies)) {
+    lines.push([domain, 'TRUE', '/', 'TRUE', String(expiry), name, value].join('\t'));
+  }
+  const file = path.join(os.tmpdir(), `dn-cookies-${process.pid}-${Date.now()}.txt`);
+  fs.writeFileSync(file, lines.join('\n') + '\n', { mode: 0o600 });
+  return file;
 }
