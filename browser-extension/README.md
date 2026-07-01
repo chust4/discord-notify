@@ -94,6 +94,9 @@ uruchomiło (np. cookie ustawione zanim wtyczka śledziła zmiany).
 
 ## Bezpieczeństwo
 
+- Wtyczka **nie zbiera i nie wysyła żadnych danych** do Mozilli ani do twórcy
+  wtyczki (manifest deklaruje `data_collection_permissions: none`) — jedyny
+  ruch sieciowy to cookie wysyłane pod adres, który sam podasz.
 - Cookie trafia **wyłącznie** pod adres, który sam skonfigurujesz — nie ma
   żadnego zewnętrznego serwera pośredniczącego.
 - Adres/login/hasło do panelu są przechowywane lokalnie w `storage.local`

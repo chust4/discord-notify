@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Discord Notify – Instagram Session Sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automatycznie wysyła cookie sesji Instagram do Twojej instancji Discord Notify po zalogowaniu na instagram.com.",
   "permissions": [
     "cookies",
@@ -27,7 +27,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "discord-notify-ig-sync@local-nas",
-      "strict_min_version": "78.0"
+      "strict_min_version": "78.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }
