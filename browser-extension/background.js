@@ -43,7 +43,13 @@ async function pushSessionId(sessionId) {
     }
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: `Nie udało się połączyć z aplikacją: ${err.message}` };
+    return {
+      ok: false,
+      error:
+        `Nie udało się połączyć z ${appUrl}: ${err.message}. ` +
+        'Sprawdź, czy adres jest poprawny, czy komputer jest w tej samej sieci co NAS, ' +
+        'i czy rozszerzenie zostało przeładowane po ostatniej aktualizacji (about:addons → ... → Przeładuj).',
+    };
   }
 }
 

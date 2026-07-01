@@ -18,18 +18,10 @@ $('save').addEventListener('click', async () => {
     status.textContent = '✗ Podaj pełny adres, np. http://192.168.0.32:8092';
     return;
   }
-
-  let origin;
   try {
-    origin = new URL(appUrl).origin + '/*';
+    new URL(appUrl);
   } catch {
     status.textContent = '✗ Niepoprawny adres URL.';
-    return;
-  }
-
-  const granted = await browser.permissions.request({ origins: [origin] });
-  if (!granted) {
-    status.textContent = '✗ Bez zgody na dostęp do tego adresu wtyczka nie może wysyłać cookie.';
     return;
   }
 
