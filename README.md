@@ -222,10 +222,11 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
   automatycznie za każdym razem, gdy przeglądasz `instagram.com`. **To jest
   automatyzacja konta i łamie regulamin Instagrama** — realne ryzyko
   ograniczenia/bana tego konta. Użyj **dedykowanego, zapasowego konta**, nigdy
-  głównego. Stories to funkcja eksperymentalna (zależna od stabilności
-  ekstraktorów `yt-dlp` dla Instagrama, które bywają niestabilne nawet z
-  poprawną sesją — Dockerfile zawsze instaluje najnowszą wersję `yt-dlp` przy
-  budowaniu obrazu, więc rebuild może naprawić chwilowe problemy).
+  głównego. Detekcja korzysta z **Instaloadera** (biblioteka Pythona budowana
+  wyłącznie pod Instagrama, wbudowana w obraz) zamiast yt-dlp — Instagram
+  aktywnie zwalcza automatyzację, więc mimo to możliwe są okresowe błędy
+  (403/429, wygasła sesja); w takim wypadku sprawdź w panelu → **Logi /
+  Historia** dokładny komunikat.
 
 ---
 

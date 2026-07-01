@@ -1,28 +1,24 @@
 import { httpGetText } from './http.js';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
-import { isAvailable, flatPlaylist } from './ytdlp.js';
-import { Settings } from '../store.js';
+import { isAvailable, fetchPosts, fetchStories } from './instaloaderRunner.js';
 
 const log = createLogger('platform:instagram');
 
 // NOTE: Instagram has no free public API for this use case, and unlike
-// TikTok/Kick, listing a profile's posts/reels (and anything about Stories)
-// requires an AUTHENTICATED session — there is no anonymous path at all.
-// Posts/reels/stories detection therefore only runs once a session cookie is
-// configured (Ustawienia panel or INSTAGRAM_SESSION_ID). Without it we fail
-// fast with a clear message instead of burning time on a call we know fails.
+// TikTok/Kick, listing a profile's posts/Reels/Stories requires an
+// AUTHENTICATED session — there is no anonymous path at all. Detection
+// therefore only runs once a session cookie is configured (Ustawienia panel
+// or INSTAGRAM_SESSION_ID / the browser extension). Without it we fail fast
+// with a clear message instead of burning time on a call we know fails.
 //
-// Separately: at the time this was written, yt-dlp's own `instagram:user`
-// extractor (used to list a profile's posts/reels) was flagged upstream as
-// "CURRENTLY BROKEN" — a yt-dlp bug independent of the session cookie. The
-// Dockerfile always installs yt-dlp's *latest* release at build time, so a
-// fresh rebuild may already include the fix. If posts/reels detection logs
-// "Unable to extract data" even with a valid session, that is very likely
-// this upstream issue rather than a problem with the cookie — check for a
-// newer yt-dlp release, or run `yt-dlp --list-extractors | grep instagram`
-// inside the container to see current status. Stories use a different
-// extractor (`instagram:story`) and are unaffected by this specific bug.
+// Posts/Reels/Stories are fetched via Instaloader (a small Python subprocess,
+// src/platforms/instaloader_fetch.py) rather than yt-dlp — Instagram is
+// Instaloader's sole focus (vs. one of ~1800 yt-dlp extractors), and it has
+// two independent fetch paths (web GraphQL + the iOS app's private API) that
+// it falls back between internally. Still genuine scraping of a platform that
+// actively fights it, so failures (403/429/session expiry) are possible and
+// surfaced as clear per-account errors rather than silently ignored.
 
 function usernameFromInput(input) {
   const value = String(input).trim();
@@ -32,10 +28,6 @@ function usernameFromInput(input) {
 
 function hasSession() {
   return Boolean(config.instagram.sessionId);
-}
-
-function sessionCookies() {
-  return { sessionid: config.instagram.sessionId };
 }
 
 export async function resolve(input) {
@@ -71,165 +63,84 @@ export async function resolve(input) {
   };
 }
 
-function classify(entry) {
-  const url = entry.webpage_url || entry.url || '';
-  if (/\/reel\//.test(url)) return 'instagram_reel';
-  return 'instagram_post';
-}
-
-const FALLBACK_URL = {
-  instagram_post: (username, id) => `https://www.instagram.com/p/${id}/`,
-  instagram_reel: (username, id) => `https://www.instagram.com/reel/${id}/`,
-  instagram_story: (username, id) => `https://www.instagram.com/stories/${username}/${id}/`,
-};
-
 const DEFAULT_TITLE = {
   instagram_post: 'Nowy post',
   instagram_reel: 'Nowy Reel',
   instagram_story: 'Nowe Story',
 };
 
-const IMAGE_EXT_RE = /\.(jpe?g|png|webp)(\?|$)/i;
-
 /**
- * The `{url}` shown in message text must be a short, stable, non-expiring
- * link. For Stories in particular, yt-dlp's flat-playlist `url` field is the
- * raw *signed CDN media file* (huge, expires in hours) rather than a webpage
- * link — using it as the display URL produces an unreadable wall of text and
- * a duplicate Discord auto-embed. So: Stories always get the constructed
- * profile/stories link; posts/reels use yt-dlp's `webpage_url` (the field it
- * reserves for canonical page links) and never the raw `url` for display.
+ * The `{url}` shown in message text must be short and stable. Posts/Reels get
+ * a real canonical Instagram page link (built by instaloader_fetch.py itself,
+ * item.url). Stories have no persistent public page — always point at the
+ * profile's stories tray instead of a raw, expiring media URL.
  */
-function displayUrl(event_type, username, entry) {
-  if (event_type === 'instagram_story') return FALLBACK_URL.instagram_story(username, entry.id);
-  return entry.webpage_url || FALLBACK_URL[event_type](username, entry.id);
+function displayUrl(event_type, username, item) {
+  if (event_type === 'instagram_story') return `https://www.instagram.com/stories/${username}/${item.id}/`;
+  return item.url;
 }
 
-/** A real image thumbnail only — never a video file (Discord embeds can't render one as `image`). */
-function pickThumbnail(entry) {
-  if (entry.thumbnail) return entry.thumbnail;
-  const fromList = entry.thumbnails?.[entry.thumbnails.length - 1]?.url;
-  if (fromList) return fromList;
-  const raw = entry.url || entry.webpage_url || '';
-  return IMAGE_EXT_RE.test(raw) ? raw : '';
-}
-
-/**
- * The raw direct-media URL (when yt-dlp gave us one distinct from the display
- * URL) — kept only for an optional "bezpośredni plik" link inside the embed,
- * never put into plain message content. Expires after a few hours; that's
- * fine since it's only useful right after the notification is sent.
- */
-function rawMediaUrl(entry, shownUrl) {
-  const raw = entry.url || '';
-  if (!raw || raw === shownUrl) return null;
-  return /cdninstagram\.com/i.test(raw) ? raw : null;
-}
-
-function buildEvent(event_type, username, entry) {
-  const url = displayUrl(event_type, username, entry);
+function buildEvent(event_type, username, item) {
   return {
     event_type,
-    external_id: String(entry.id),
-    title: entry.title || entry.description || DEFAULT_TITLE[event_type],
-    url,
-    thumbnail_url: pickThumbnail(entry),
-    raw_media_url: rawMediaUrl(entry, url),
-    published_at: entry.timestamp ? new Date(entry.timestamp * 1000).toISOString() : new Date().toISOString(),
-    duration: entry.duration ? `${Math.round(entry.duration)}s` : '',
+    external_id: String(item.id),
+    title: item.title || DEFAULT_TITLE[event_type],
+    url: displayUrl(event_type, username, item),
+    // .thumbnail_url is always a still image (never a video file — Discord
+    // embeds can't render one via `image`); .video_url (if any) is kept
+    // separate below for an optional clickable link inside the embed.
+    thumbnail_url: item.thumbnail_url || '',
+    raw_media_url: item.video_url || null,
+    published_at: item.timestamp ? new Date(item.timestamp * 1000).toISOString() : new Date().toISOString(),
+    duration: item.duration ? `${item.duration}s` : '',
     viewer_count: '',
     category: '',
   };
 }
 
-// yt-dlp's `instagram:user` extractor (used to list a profile's posts/reels)
-// can be broken upstream independent of the session cookie (see file header).
-// When it fails with that specific signature, a full attempt still costs
-// 30-60+ seconds (yt-dlp exhausts several internal attempts before giving
-// up), which drags out every poll cycle for no benefit — it is virtually
-// guaranteed to fail again next cycle too. So: back off for an hour per
-// account after that specific failure instead of paying the full cost every
-// POLL_INTERVAL_SECONDS. Persisted in the settings table (not just in-memory)
-// so a container restart/redeploy doesn't force a fresh full-cost attempt for
-// every Instagram account again — it survives until the hour is actually up.
-const BROKEN_EXTRACTOR_RE = /\[instagram:user\].*unable to extract data/i;
-const POSTS_BACKOFF_MS = 60 * 60 * 1000;
-const backoffSettingKey = (accountId) => `instagram.posts_backoff_until.${accountId}`;
-
 /**
- * Posts + Reels: one combined listing of the profile, classified by URL shape.
+ * Posts + Reels: one combined listing of the profile, classified by is_video
+ * (Instagram no longer meaningfully distinguishes feed videos from Reels at
+ * the metadata level Instaloader exposes — both are shown under /reel/).
  */
 async function checkPostsAndReels(account, knownIds, freshEvents) {
-  const key = backoffSettingKey(account.id);
-  const backoffUntil = Number(Settings.get(key, 0));
-  if (backoffUntil && Date.now() < backoffUntil) {
-    // Stable message text (no countdown) so the poller's "only log when the
-    // error changes" dedup treats every skipped cycle as a non-event instead
-    // of re-logging to history every 5 minutes during the 1h backoff.
-    throw new Error('wstrzymane po znanym błędzie ekstraktora yt-dlp dla Instagrama (godzinny cooldown)');
-  }
+  const items = await fetchPosts(account.identifier, { limit: 12 });
+  if (!items.length) throw new Error('pusta lista postów (profil prywatny, brak treści lub sesja wygasła)');
 
-  let entries;
-  try {
-    entries = await flatPlaylist(`https://www.instagram.com/${account.identifier}/`, {
-      limit: 12,
-      cookies: sessionCookies(),
-    });
-  } catch (err) {
-    if (BROKEN_EXTRACTOR_RE.test(err.message)) {
-      Settings.set(key, String(Date.now() + POSTS_BACKOFF_MS));
-      log.warn('yt-dlp instagram:user extractor failed (known upstream issue) — backing off 1h', {
-        account: account.identifier,
-      });
-      throw new Error(
-        'ekstraktor yt-dlp dla profili Instagram jest obecnie oznaczony jako niedziałający (znany błąd upstream, ' +
-          'niezależny od cookie) — wstrzymuję próby na godzinę; sprawdź czy dostępna jest nowsza wersja yt-dlp'
-      );
-    }
-    throw err;
-  }
-  Settings.set(key, '0');
-
-  if (!entries.length) throw new Error('pusta lista postów (profil prywatny, brak treści lub sesja wygasła)');
-
-  const ids = entries.map((e) => String(e.id));
+  const ids = items.map((i) => String(i.id));
   if (knownIds.size === 0) {
     for (const id of ids) knownIds.add(id);
     return; // baseline only, no back-catalogue blast
   }
-  const fresh = entries.filter((e) => !knownIds.has(String(e.id))).reverse(); // oldest first
-  for (const entry of fresh) {
-    freshEvents.push(buildEvent(classify(entry), account.identifier, entry));
-    knownIds.add(String(entry.id));
+  const fresh = items.filter((i) => !knownIds.has(String(i.id))).reverse(); // oldest first
+  for (const item of fresh) {
+    const event_type = item.is_video ? 'instagram_reel' : 'instagram_post';
+    freshEvents.push(buildEvent(event_type, account.identifier, item));
+    knownIds.add(String(item.id));
   }
 }
 
 /**
  * Stories: currently-active items only (Instagram has no story archive via
- * public means). Experimental — depends on yt-dlp's instagram:story
- * extractor, which is less battle-tested than the post/reel path.
+ * public means).
  */
 async function checkStories(account, knownIds, freshEvents) {
-  let entries;
+  let items;
   try {
-    entries = await flatPlaylist(`https://www.instagram.com/stories/${account.identifier}/`, {
-      limit: 12,
-      cookies: sessionCookies(),
-    });
+    items = await fetchStories(account.identifier);
   } catch (err) {
-    // No active stories is the common case, not a real error — yt-dlp usually
-    // reports this as an extraction failure since there's nothing to list.
+    // No active stories is the common case, not a real error.
     log.debug('No active Instagram stories or story fetch failed', {
       account: account.identifier,
       err: err.message,
     });
     return;
   }
-  for (const entry of entries) {
-    const id = String(entry.id);
+  for (const item of items) {
+    const id = String(item.id);
     if (knownIds.has(id)) continue;
     knownIds.add(id);
-    freshEvents.push(buildEvent('instagram_story', account.identifier, entry));
+    freshEvents.push(buildEvent('instagram_story', account.identifier, item));
   }
 }
 
@@ -245,7 +156,7 @@ export async function check(account) {
     };
   }
   if (!(await isAvailable())) {
-    return { events, state, error: 'Instagram: yt-dlp niedostępne' };
+    return { events, state, error: 'Instagram: instaloader niedostępny w obrazie kontenera' };
   }
 
   // Single combined watermark (post/reel ids + story ids together — IDs never

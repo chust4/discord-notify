@@ -98,12 +98,17 @@ export const config = {
     signApiKey: process.env.SIGN_API_KEY || '',
   },
   instagram: {
-    // Instagram's post/reel listing (and all of Stories) requires an
-    // authenticated session — there is no anonymous API. This is the
-    // `sessionid` cookie value from a logged-in Instagram session. Strongly
-    // recommend a dedicated/throwaway account: automating a session this way
-    // is against Instagram's ToS and risks that account being restricted.
+    // Instagram's post/reel/Stories listing requires an authenticated
+    // session — there is no anonymous API. This is the `sessionid` cookie
+    // value from a logged-in Instagram session. Strongly recommend a
+    // dedicated/throwaway account: automating a session this way is against
+    // Instagram's ToS and risks that account being restricted.
     sessionId: process.env.INSTAGRAM_SESSION_ID || '',
+    // Posts/Reels/Stories are fetched via a small Instaloader (Python)
+    // subprocess bundled in the image — see instaloader_fetch.py.
+    enabled: bool(process.env.INSTAGRAM_ENABLED, true),
+    pythonPath: process.env.INSTAGRAM_PYTHON_PATH || 'python3',
+    timeoutMs: int(process.env.INSTAGRAM_TIMEOUT_MS, 30000),
   },
 
   // yt-dlp powers reliable TikTok new-video detection (and is reusable for

@@ -23,9 +23,9 @@ konta.**
 2. Odczytuje wartość cookie `sessionid` przez `browser.cookies` API.
 3. Jeśli zmieniła się od ostatniej wysyłki, wysyła ją do Twojej aplikacji:
    `PUT {adres_aplikacji}/api/config` z ciałem `{"instagram_session_id": "..."}`.
-4. Aplikacja zapisuje ją i używa jako cookie dla `yt-dlp` przy sprawdzaniu
-   Instagrama — identycznie jak wpisanie tej wartości ręcznie w panelu,
-   sekcja **Ustawienia**.
+4. Aplikacja zapisuje ją i używa jako cookie sesji przy sprawdzaniu Instagrama
+   (przez Instaloader) — identycznie jak wpisanie tej wartości ręcznie
+   w panelu, sekcja **Ustawienia**.
 
 Wtyczka **nie wysyła** nic innego — żadnej historii przeglądania, żadnych
 innych cookies, tylko tę jedną wartość, tylko do adresu, który sam wskażesz.
