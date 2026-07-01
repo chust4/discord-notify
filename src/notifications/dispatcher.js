@@ -82,6 +82,25 @@ function colorFor(platform) {
 }
 
 /**
+ * Best-effort: react to a just-sent/edited notification message with the
+ * configured emoji. Never throws — a bad/invalid emoji or missing permission
+ * must not fail the notification itself.
+ */
+async function addReactionIfConfigured(message, setting) {
+  if (!setting.reaction_emoji || !message) return;
+  try {
+    await message.react(setting.reaction_emoji);
+    log.info('Added reaction to notification', {
+      setting_id: setting.id, message_id: message.id, emoji: setting.reaction_emoji,
+    });
+  } catch (err) {
+    log.warn('Could not add reaction to notification', {
+      setting_id: setting.id, message_id: message.id, emoji: setting.reaction_emoji, err: err.message,
+    });
+  }
+}
+
+/**
  * Send a single notification according to its configured mode. Returns a
  * status string for the events log.
  */
@@ -145,7 +164,8 @@ async function sendOne({ setting, event, profile, account, isTest = false }) {
       const body = content || `${context.creator_name} — ${event.url || ''}`.trim();
       payload.content = (isTest ? '🧪 (TEST) ' : '') + body;
     }
-    await channel.send(payload);
+    const sent = await channel.send(payload);
+    await addReactionIfConfigured(sent, setting);
     return { status: EVENT_STATUS.SENT, detail: null };
   } catch (err) {
     if (err.code === 50013) {
@@ -171,6 +191,7 @@ async function sendOrEditPanel({ channel, setting, payload }) {
     try {
       const msg = await channel.messages.fetch(setting.panel_message_id);
       await msg.edit(payload);
+      await addReactionIfConfigured(msg, setting);
       return { status: EVENT_STATUS.PANEL_EDITED, detail: 'Zaktualizowano panel' };
     } catch {
       log.warn('Panel message missing, recreating', { setting_id: setting.id });
@@ -178,6 +199,7 @@ async function sendOrEditPanel({ channel, setting, payload }) {
   }
   const msg = await channel.send(payload);
   NotificationSettings.setPanelMessage(setting.id, msg.id, channel.id);
+  await addReactionIfConfigured(msg, setting);
   return { status: EVENT_STATUS.SENT, detail: 'Utworzono panel' };
 }
 
@@ -228,6 +250,7 @@ async function sendHybridPinnedPanel({
   log.info('Temporary notification sent', {
     profile: profile.name, event: event.event_type, channel: channel.id, message_id: tempMsg.id,
   });
+  await addReactionIfConfigured(tempMsg, setting);
 
   // --- 3. remember it ---
   const newId = TempNotifications.record({

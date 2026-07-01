@@ -19,6 +19,8 @@ import {
   TEMPLATE_VARIABLES,
   TEMPLATE_SAMPLE,
   DEFAULT_TEMPLATES,
+  DEFAULT_REACTION_EMOJI,
+  REACTION_EMOJI_CHOICES,
 } from '../constants.js';
 import { validateTemplate, renderTemplate, previewTemplate } from '../notifications/templates.js';
 import { getPlatform } from '../platforms/index.js';
@@ -55,6 +57,8 @@ apiRouter.get('/meta', (_req, res) => {
     templateSample: TEMPLATE_SAMPLE,
     defaultTemplates: DEFAULT_TEMPLATES,
     youtubeShortMaxSeconds: config.youtubeShortMaxSeconds,
+    defaultReactionEmoji: DEFAULT_REACTION_EMOJI,
+    reactionEmojiChoices: REACTION_EMOJI_CHOICES,
   });
 });
 

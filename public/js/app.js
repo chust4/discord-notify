@@ -201,6 +201,7 @@ function legendHtml() {
           <li>Bot potrzebuje na kanale: <i>Wyświetlanie, Wysyłanie, Embed Links</i>; dla panelu też <i>Manage Messages</i>.</li>
           <li><code>{role_ping}</code> w szablonie = realny ping. Pinguje tylko wybrana rola.</li>
           <li>Przycisk „Wyślij test" nie liczy się do statystyk.</li>
+          <li>„Reakcja po wysłaniu" dodaje wybrane emoji pod wysłaną wiadomością (domyślnie ❤️). Bot potrzebuje uprawnienia <i>Add Reactions</i> na kanale.</li>
         </ul>
       </details>
     </div>`;
@@ -462,6 +463,16 @@ function eventRowHtml(s, channels, roles) {
             ${roles.map((r) => `<option value="${r.id}" ${s.role_ping_id === r.id ? 'selected' : ''}>@${esc(r.name)}</option>`).join('')}
           </select>
         </label>
+        <label class="field" style="margin:0">
+          <span>Reakcja po wysłaniu</span>
+          <div class="row" style="gap:10px;margin-top:2px">
+            <label class="switch"><input type="checkbox" data-field="reaction_enabled" ${s.reaction_emoji ? 'checked' : ''}><span class="slider"></span></label>
+            <div class="row" data-reaction-picker style="gap:6px;display:${s.reaction_emoji ? 'flex' : 'none'}">
+              <input type="text" data-field="reaction_emoji" value="${esc(s.reaction_emoji || META.defaultReactionEmoji || '❤️')}" style="width:58px;text-align:center;font-size:18px;padding:6px 4px" maxlength="8" />
+              ${(META.reactionEmojiChoices || []).map((e) => `<button type="button" class="var-chip" data-reaction-choice="${esc(e)}" style="font-size:15px;cursor:pointer">${e}</button>`).join('')}
+            </div>
+          </div>
+        </label>
         <label class="field" style="margin:0"><span>Szablon wiadomości</span>
           <textarea data-field="template" rows="4">${esc(s.template || '')}</textarea>
         </label>
@@ -488,8 +499,28 @@ function wireEventRow(row, channels, roles) {
   const templateEl = get('[data-field="template"]');
   const previewEl = get('[data-preview]');
   const validationEl = get('[data-validation]');
+  const reactionEnabledCb = get('[data-field="reaction_enabled"]');
+  const reactionPicker = get('[data-reaction-picker]');
+  const reactionEmojiInput = get('[data-field="reaction_emoji"]');
 
   get('[data-toggle]').onclick = () => row.classList.toggle('open');
+
+  reactionEnabledCb.onchange = () => {
+    reactionPicker.style.display = reactionEnabledCb.checked ? 'flex' : 'none';
+    if (reactionEnabledCb.checked && !reactionEmojiInput.value.trim()) {
+      reactionEmojiInput.value = META.defaultReactionEmoji || '❤️';
+    }
+  };
+  row.querySelectorAll('[data-reaction-choice]').forEach((btn) => {
+    btn.onclick = () => {
+      reactionEmojiInput.value = btn.dataset.reactionChoice;
+      reactionEnabledCb.checked = true;
+      reactionPicker.style.display = 'flex';
+    };
+  });
+
+  const reactionEmojiValue = () =>
+    reactionEnabledCb.checked ? reactionEmojiInput.value.trim() || META.defaultReactionEmoji || '❤️' : null;
 
   // Toggling enabled saves immediately.
   enabledCb.onchange = async () => {
@@ -537,6 +568,7 @@ function wireEventRow(row, channels, roles) {
       mode: get('[data-field="mode"]').value,
       role_ping_id: get('[data-field="role_ping_id"]').value || null,
       template: templateEl.value,
+      reaction_emoji: reactionEmojiValue(),
     };
     try {
       await api.updateSetting(sid, body);
@@ -561,6 +593,7 @@ function wireEventRow(row, channels, roles) {
         mode: get('[data-field="mode"]').value,
         role_ping_id: get('[data-field="role_ping_id"]').value || null,
         template: templateEl.value,
+        reaction_emoji: reactionEmojiValue(),
       });
       const res = await api.testSetting(sid);
       if (['sent', 'panel_edited'].includes(res.status)) toast('✅ Test wysłany na Discord', 'success');

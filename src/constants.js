@@ -11,6 +11,11 @@ export const PLATFORM_LABELS = {
 
 export const NOTIFICATION_MODES = ['message', 'embed', 'panel', 'pinned_panel'];
 
+// Default emoji reaction the bot adds after sending a notification (opt-in
+// per event type; quick-pick choices offered alongside a free-text input).
+export const DEFAULT_REACTION_EMOJI = '❤️';
+export const REACTION_EMOJI_CHOICES = ['❤️', '🔥', '🎉', '👀', '🔔', '👍'];
+
 export const MODE_LABELS = {
   message: 'Zwykła wiadomość',
   embed: 'Embed Discord',

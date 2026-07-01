@@ -285,6 +285,7 @@ export const NotificationSettings = {
       'role_ping_id',
       'panel_message_id',
       'panel_channel_id',
+      'reaction_emoji',
     ];
     const sets = [];
     const vals = [];
