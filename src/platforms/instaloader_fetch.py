@@ -7,9 +7,13 @@ checks the "ok" field rather than parsing stderr/exit codes, so a Python
 traceback never has to be scraped for error text. Never downloads media to
 disk; only reads metadata over the network.
 
+The session is read from the INSTALOADER_SESSION_ID env var as a JSON object
+with "sessionid", "csrftoken" and "ds_user_id" keys (all three are required —
+see build_context() for why a bare sessionid is not enough).
+
 Usage:
-  instaloader_fetch.py --mode posts --username NAME [--session-id ID] [--limit N]
-  instaloader_fetch.py --mode stories --username NAME [--session-id ID]
+  instaloader_fetch.py --mode posts --username NAME [--limit N]
+  instaloader_fetch.py --mode stories --username NAME
 """
 import argparse
 import json
@@ -18,8 +22,10 @@ import sys
 
 import instaloader
 
+REQUIRED_COOKIES = ("sessionid", "csrftoken", "ds_user_id")
 
-def build_context(session_id):
+
+def build_context(session_json):
     L = instaloader.Instaloader(
         quiet=True,
         download_pictures=False,
@@ -31,8 +37,33 @@ def build_context(session_id):
         compress_json=False,
         max_connection_attempts=1,
     )
-    if session_id:
-        L.context._session.cookies.set("sessionid", session_id, domain=".instagram.com")
+    if not session_json:
+        return L
+
+    # Instagram's GraphQL endpoint requires more than a bare `sessionid`:
+    # Instaloader's own load_session() also needs `csrftoken` (sent as the
+    # X-CSRFToken header on every query) and sets `context.username` from
+    # the id we pass in, which flips `context.is_logged_in` to True and
+    # unlocks several logged-in-only code paths inside the library. Manually
+    # poking just a `sessionid` cookie onto an anonymous session (the
+    # previous approach here) leaves both of those unset and gets a plain
+    # 403 back from Instagram — confirmed against Instaloader's own source.
+    try:
+        session = json.loads(session_json)
+        if not isinstance(session, dict):
+            session = {}
+    except (TypeError, ValueError):
+        # Backward-compat: a bare (non-JSON) value is treated as just the
+        # sessionid, so the resulting error correctly names only the *other*
+        # two cookies as missing instead of claiming all three are absent.
+        session = {"sessionid": session_json}
+    missing = [k for k in REQUIRED_COOKIES if not session.get(k)]
+    if missing:
+        raise RuntimeError(
+            "niekompletna sesja Instagram — brakuje: " + ", ".join(missing) +
+            " (zaktualizuj wtyczkę przeglądarki i zsynchronizuj ponownie, albo wklej pełny JSON w panelu)"
+        )
+    L.context.load_session(session["ds_user_id"], {k: session[k] for k in REQUIRED_COOKIES})
     return L
 
 
@@ -96,9 +127,9 @@ def main():
     p.add_argument("--limit", type=int, default=12)
     args = p.parse_args()
 
-    session_id = os.environ.get("INSTALOADER_SESSION_ID", "")
+    session_json = os.environ.get("INSTALOADER_SESSION_ID", "")
     try:
-        L = build_context(session_id)
+        L = build_context(session_json)
         if args.mode == "posts":
             items = fetch_posts(L, args.username, args.limit)
         else:

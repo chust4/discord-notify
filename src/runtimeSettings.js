@@ -34,9 +34,9 @@ export const MANAGED_FIELDS = [
     help: 'To ustawienie, nie klucz API. Film krótszy niż ta wartość = Short, równy/dłuższy = zwykły film.',
   },
   {
-    key: 'instagram_session_id', label: 'Instagram Session ID (cookie)', type: 'secret',
+    key: 'instagram_session_id', label: 'Instagram Session (cookies)', type: 'secret',
     requirement: 'required-instagram',
-    help: 'Wymagany dla Instagrama (posty/Reels/Stories) — Instagram nie ma publicznego API. Wklej cookie "sessionid" z zalogowanej sesji. ⚠️ Użyj DEDYKOWANEGO/zapasowego konta, nie głównego — automatyzacja sesji łamie regulamin Instagrama i grozi ograniczeniem konta. Zobacz browser-extension/ w repo, by ustawiać to automatycznie.',
+    help: 'Wymagany dla Instagrama (posty/Reels/Stories) — Instagram nie ma publicznego API. Najłatwiej ustawić przez wtyczkę przeglądarki (browser-extension/ w repo) — robi to automatycznie. Ręcznie: JSON {"sessionid":"...","csrftoken":"...","ds_user_id":"..."} — samo sessionid NIE wystarczy. ⚠️ Użyj DEDYKOWANEGO/zapasowego konta, nie głównego — automatyzacja sesji łamie regulamin Instagrama i grozi ograniczeniem konta.',
   },
 ];
 

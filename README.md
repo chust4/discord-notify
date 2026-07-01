@@ -215,18 +215,22 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
 - **TikTok LIVE:** działa od razu (`TIKTOK_LIVE_ENABLED=true`). Jeśli trafisz na
   limity zapytań, załóż darmowy klucz na <https://www.eulerstream.com> i ustaw
   `SIGN_API_KEY`. Uwaga: biblioteka wykrywa **transmisje live**, nie nowe filmy.
-- **Instagram — ⚠️ przeczytaj przed użyciem:** wklej cookie `sessionid` z
-  zalogowanej sesji Instagram w panelu → **Ustawienia** (pole „Instagram
-  Session ID"), albo zainstaluj wtyczkę Firefox z folderu
-  [`browser-extension/`](browser-extension/README.md), która robi to
-  automatycznie za każdym razem, gdy przeglądasz `instagram.com`. **To jest
-  automatyzacja konta i łamie regulamin Instagrama** — realne ryzyko
-  ograniczenia/bana tego konta. Użyj **dedykowanego, zapasowego konta**, nigdy
-  głównego. Detekcja korzysta z **Instaloadera** (biblioteka Pythona budowana
-  wyłącznie pod Instagrama, wbudowana w obraz) zamiast yt-dlp — Instagram
-  aktywnie zwalcza automatyzację, więc mimo to możliwe są okresowe błędy
-  (403/429, wygasła sesja); w takim wypadku sprawdź w panelu → **Logi /
-  Historia** dokładny komunikat.
+- **Instagram — ⚠️ przeczytaj przed użyciem:** najłatwiej zainstaluj wtyczkę
+  Firefox z folderu [`browser-extension/`](browser-extension/README.md) —
+  automatycznie wysyła komplet wymaganych cookies za każdym razem, gdy
+  przeglądasz `instagram.com`. Ręcznie w panelu → **Ustawienia** (pole
+  „Instagram Session") trzeba wkleić **JSON, nie samo `sessionid`** — Instagram
+  odrzuca zapytania bez poprawnego tokenu CSRF:
+  `{"sessionid":"...","csrftoken":"...","ds_user_id":"..."}` (wszystkie trzy
+  cookies z zalogowanej sesji, patrz DevTools przeglądarki → Storage →
+  Cookies → instagram.com). **To jest automatyzacja konta i łamie regulamin
+  Instagrama** — realne ryzyko ograniczenia/bana tego konta. Użyj
+  **dedykowanego, zapasowego konta**, nigdy głównego. Detekcja korzysta
+  z **Instaloadera** (biblioteka Pythona budowana wyłącznie pod Instagrama,
+  wbudowana w obraz) zamiast yt-dlp — Instagram aktywnie zwalcza
+  automatyzację, więc mimo to możliwe są okresowe błędy (403/429, wygasła
+  sesja); w takim wypadku sprawdź w panelu → **Logi / Historia** dokładny
+  komunikat.
 
 ---
 

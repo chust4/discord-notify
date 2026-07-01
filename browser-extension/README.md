@@ -1,9 +1,9 @@
 # Discord Notify — Instagram Session Sync (wtyczka Firefox)
 
-Automatycznie wysyła cookie sesji Instagram (`sessionid`) do Twojej instancji
+Automatycznie wysyła komplet cookies sesji Instagram do Twojej instancji
 Discord Notify za każdym razem, gdy odwiedzasz `instagram.com` zalogowany. Bez
-tego cookie **wykrywanie postów/Reels/Stories na Instagramie w ogóle nie
-działa** — Instagram nie ma do tego darmowego, publicznego API.
+nich **wykrywanie postów/Reels/Stories na Instagramie w ogóle nie działa** —
+Instagram nie ma do tego darmowego, publicznego API.
 
 ## ⚠️ Zanim zainstalujesz — realne ryzyko
 
@@ -19,16 +19,20 @@ konta.**
 ## Jak to działa
 
 1. Wtyczka nasłuchuje, kiedy odwiedzasz `instagram.com` (lub gdy zmienia się
-   cookie `sessionid` — np. po ponownym zalogowaniu).
-2. Odczytuje wartość cookie `sessionid` przez `browser.cookies` API.
-3. Jeśli zmieniła się od ostatniej wysyłki, wysyła ją do Twojej aplikacji:
-   `PUT {adres_aplikacji}/api/config` z ciałem `{"instagram_session_id": "..."}`.
-4. Aplikacja zapisuje ją i używa jako cookie sesji przy sprawdzaniu Instagrama
-   (przez Instaloader) — identycznie jak wpisanie tej wartości ręcznie
+   któreś z wymaganych cookies — np. po ponownym zalogowaniu).
+2. Odczytuje trzy cookies przez `browser.cookies` API: `sessionid`,
+   `csrftoken` i `ds_user_id`. **Wszystkie trzy są wymagane** — samo
+   `sessionid` nie wystarczy, bo Instagram odrzuca zapytania bez poprawnego
+   nagłówka CSRF (potwierdzone w kodzie źródłowym Instaloadera).
+3. Jeśli komplet się zmienił od ostatniej wysyłki, wysyła go jako jeden JSON
+   do Twojej aplikacji: `PUT {adres_aplikacji}/api/config` z ciałem
+   `{"instagram_session_id": "{\"sessionid\":\"...\",\"csrftoken\":\"...\",\"ds_user_id\":\"...\"}"}`.
+4. Aplikacja zapisuje to i używa jako pełną sesję przy sprawdzaniu Instagrama
+   (przez Instaloader) — identycznie jak wklejenie tego samego JSON-a ręcznie
    w panelu, sekcja **Ustawienia**.
 
 Wtyczka **nie wysyła** nic innego — żadnej historii przeglądania, żadnych
-innych cookies, tylko tę jedną wartość, tylko do adresu, który sam wskażesz.
+innych cookies, tylko te trzy wartości, tylko do adresu, który sam wskażesz.
 
 ## Instalacja
 
@@ -88,7 +92,7 @@ z adresem, który sam podasz poniżej — zaakceptuj to okno przy instalacji.
 5. Wejdź na `instagram.com` zalogowany na docelowe konto. Cookie zostanie
    wysłane automatycznie w tle.
 6. Sprawdź w panelu Discord Notify → **Ustawienia** → pole „Instagram Session
-   ID" powinno pokazać `ustawione ••••xxxx`.
+   (cookies)" powinno pokazać `ustawione ••••xxxx`.
 
 > Jeśli po zapisaniu widzisz błąd „NetworkError when attempting to fetch
 > resource" — zaktualizuj wtyczkę do najnowszej wersji z tego repo (starsze
