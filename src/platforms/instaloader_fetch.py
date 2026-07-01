@@ -64,6 +64,13 @@ def build_context(session_json):
             " (zaktualizuj wtyczkę przeglądarki i zsynchronizuj ponownie, albo wklej pełny JSON w panelu)"
         )
     L.context.load_session(session["ds_user_id"], {k: session[k] for k in REQUIRED_COOKIES})
+    # Instagram's newer `xdt_api__v1__...` GraphQL queries (used for the
+    # logged-in post-timeline listing) appear to require this header, which
+    # Instaloader does not set by default. It is Instagram's public web app
+    # client id — the same well-known constant other Instagram tools (e.g.
+    # yt-dlp's extractor) send. Harmless to include; Stories detection does
+    # not need it and is unaffected either way.
+    L.context._session.headers.update({"X-IG-App-ID": "936619743392459"})
     return L
 
 
@@ -111,7 +118,11 @@ def fetch_stories(L, username):
                 "id": str(item.mediaid),
                 "url": item.url,
                 "title": None,
-                "thumbnail_url": item.url if not is_video else None,
+                # .url is documented as "URL of the picture / video thumbnail"
+                # — always a still image, even for video items (the actual
+                # video file is the separate .video_url captured below). No
+                # is_video branching needed/correct here.
+                "thumbnail_url": item.url,
                 "video_url": safe_video_url(item),
                 "timestamp": int(item.date_utc.timestamp()),
                 "duration": None,
