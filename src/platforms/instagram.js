@@ -2,6 +2,7 @@ import { httpGetText } from './http.js';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
 import { isAvailable, flatPlaylist } from './ytdlp.js';
+import { Settings } from '../store.js';
 
 const log = createLogger('platform:instagram');
 
@@ -148,17 +149,19 @@ function buildEvent(event_type, username, entry) {
 // up), which drags out every poll cycle for no benefit — it is virtually
 // guaranteed to fail again next cycle too. So: back off for an hour per
 // account after that specific failure instead of paying the full cost every
-// POLL_INTERVAL_SECONDS. In-memory only (resets on restart, which is fine —
-// a redeploy is exactly when a yt-dlp fix would land anyway).
+// POLL_INTERVAL_SECONDS. Persisted in the settings table (not just in-memory)
+// so a container restart/redeploy doesn't force a fresh full-cost attempt for
+// every Instagram account again — it survives until the hour is actually up.
 const BROKEN_EXTRACTOR_RE = /\[instagram:user\].*unable to extract data/i;
 const POSTS_BACKOFF_MS = 60 * 60 * 1000;
-const postsBackoffUntil = new Map(); // account.id -> resume-after timestamp (ms)
+const backoffSettingKey = (accountId) => `instagram.posts_backoff_until.${accountId}`;
 
 /**
  * Posts + Reels: one combined listing of the profile, classified by URL shape.
  */
 async function checkPostsAndReels(account, knownIds, freshEvents) {
-  const backoffUntil = postsBackoffUntil.get(account.id);
+  const key = backoffSettingKey(account.id);
+  const backoffUntil = Number(Settings.get(key, 0));
   if (backoffUntil && Date.now() < backoffUntil) {
     // Stable message text (no countdown) so the poller's "only log when the
     // error changes" dedup treats every skipped cycle as a non-event instead
@@ -174,7 +177,7 @@ async function checkPostsAndReels(account, knownIds, freshEvents) {
     });
   } catch (err) {
     if (BROKEN_EXTRACTOR_RE.test(err.message)) {
-      postsBackoffUntil.set(account.id, Date.now() + POSTS_BACKOFF_MS);
+      Settings.set(key, String(Date.now() + POSTS_BACKOFF_MS));
       log.warn('yt-dlp instagram:user extractor failed (known upstream issue) — backing off 1h', {
         account: account.identifier,
       });
@@ -185,7 +188,7 @@ async function checkPostsAndReels(account, knownIds, freshEvents) {
     }
     throw err;
   }
-  postsBackoffUntil.delete(account.id);
+  Settings.set(key, '0');
 
   if (!entries.length) throw new Error('pusta lista postów (profil prywatny, brak treści lub sesja wygasła)');
 
