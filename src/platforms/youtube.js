@@ -9,6 +9,11 @@ const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_
 const FEED_URL = (channelId) =>
   `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
 
+// This endpoint sporadically returns 404 for channels that demonstrably exist
+// (edge/CDN flakiness rather than a real "not found"), same as its sporadic
+// 500s — so widen retries to cover 404 here specifically.
+const FEED_FETCH_OPTS = { retryStatuses: [404], retries: 3, retryDelayMs: 1000 };
+
 /**
  * Resolve any YouTube input (channel id, @handle, channel/user URL) into a
  * canonical channel id plus display name and avatar (avatar requires API key).
@@ -24,7 +29,7 @@ export async function resolve(input) {
 
   // Pull name + avatar from the RSS feed first (no API key needed for name).
   try {
-    const xml = await httpGetText(FEED_URL(channelId));
+    const xml = await httpGetText(FEED_URL(channelId), FEED_FETCH_OPTS);
     const feed = parser.parse(xml);
     display_name = feed?.feed?.author?.name || feed?.feed?.title || display_name;
   } catch (err) {
@@ -143,7 +148,7 @@ export async function check(account) {
 
   let xml;
   try {
-    xml = await httpGetText(FEED_URL(account.identifier));
+    xml = await httpGetText(FEED_URL(account.identifier), FEED_FETCH_OPTS);
   } catch (err) {
     return { events, state, error: `Feed error: ${err.message}` };
   }

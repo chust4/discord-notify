@@ -8,12 +8,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * transient failures (network errors, timeouts, HTTP 429/5xx). Throws on a
  * non-2xx final response unless `allowStatuses` includes the status code.
  *
- * YouTube's RSS feed endpoint in particular returns sporadic HTTP 500s; a
- * couple of short retries make these invisible instead of logging an error.
+ * YouTube's RSS feed endpoint in particular returns sporadic HTTP 500s *and*
+ * HTTP 404s for channels that demonstrably exist (confirmed by immediately
+ * re-requesting the same URL) — an edge/CDN flakiness, not a real 404. Callers
+ * that know a status is flaky-but-not-fatal for their endpoint can widen
+ * retries via `retryStatuses` (e.g. youtube.js adds 404 for the feed URL).
  */
 export async function httpGet(
   url,
-  { headers = {}, timeoutMs = 15000, allowStatuses = [], retries = 2, retryDelayMs = 800 } = {}
+  {
+    headers = {},
+    timeoutMs = 15000,
+    allowStatuses = [],
+    retries = 2,
+    retryDelayMs = 800,
+    retryStatuses = [],
+  } = {}
 ) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -25,7 +35,7 @@ export async function httpGet(
         signal: controller.signal,
       });
       if (!res.ok && !allowStatuses.includes(res.status)) {
-        const transient = res.status === 429 || res.status >= 500;
+        const transient = res.status === 429 || res.status >= 500 || retryStatuses.includes(res.status);
         if (transient && attempt < retries) {
           await sleep(retryDelayMs * (attempt + 1));
           continue;
@@ -40,7 +50,8 @@ export async function httpGet(
     } catch (err) {
       lastErr = err;
       const networkish = err.name === 'AbortError' || err.name === 'TypeError' || Boolean(err.cause);
-      const retriableStatus = err.status === 429 || (err.status >= 500 && err.status < 600);
+      const retriableStatus =
+        err.status === 429 || (err.status >= 500 && err.status < 600) || retryStatuses.includes(err.status);
       if (attempt < retries && (networkish || retriableStatus)) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
