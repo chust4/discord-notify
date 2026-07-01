@@ -68,6 +68,11 @@ function buildEmbed(event, context, profile, account) {
   if (context.category) lines.push(`**Kategoria:** ${context.category}`);
   if (context.viewer_count) lines.push(`**Widzowie:** ${context.viewer_count}`);
   if (context.duration) lines.push(`**Długość:** ${context.duration}`);
+  // A raw, expiring direct-media link (e.g. Instagram Stories) — shown as a
+  // short clickable field inside the embed (Discord renders [text](url) here,
+  // unlike plain message content) instead of a huge raw URL that would also
+  // trigger Discord's own duplicate auto-embed if placed in message text.
+  if (event.raw_media_url) lines.push(`**Plik:** [Otwórz bezpośredni link](${event.raw_media_url})`);
   if (lines.length) embed.setDescription(lines.join('\n'));
 
   if (event.thumbnail_url) embed.setImage(event.thumbnail_url);

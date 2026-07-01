@@ -49,8 +49,12 @@ export async function resolve(input) {
     if (og) avatar_url = og[1].replace(/&amp;/g, '&');
     const title = html.match(/<title>([^<]+)<\/title>/);
     if (title) {
-      // "Name (@handle) • Instagram photos and videos" -> keep the name part.
-      display_name = title[1].split('(@')[0].trim().replace(/&#0?64;/g, '@') || username;
+      // Page title is "Name (&#064;handle) • Instagram photos and videos" —
+      // the @ is HTML-entity-encoded, so it must be decoded BEFORE splitting
+      // on "(@", otherwise the split never matches and the whole title (incl.
+      // "• Instagram photos and videos") ends up as the display name.
+      const decoded = title[1].replace(/&#0?64;/g, '@').replace(/&amp;/g, '&');
+      display_name = decoded.split('(@')[0].trim() || username;
     }
   } catch (err) {
     log.warn('Instagram resolve failed (best-effort), storing username only', {
@@ -67,7 +71,7 @@ export async function resolve(input) {
 }
 
 function classify(entry) {
-  const url = entry.url || entry.webpage_url || '';
+  const url = entry.webpage_url || entry.url || '';
   if (/\/reel\//.test(url)) return 'instagram_reel';
   return 'instagram_post';
 }
@@ -84,13 +88,52 @@ const DEFAULT_TITLE = {
   instagram_story: 'Nowe Story',
 };
 
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp)(\?|$)/i;
+
+/**
+ * The `{url}` shown in message text must be a short, stable, non-expiring
+ * link. For Stories in particular, yt-dlp's flat-playlist `url` field is the
+ * raw *signed CDN media file* (huge, expires in hours) rather than a webpage
+ * link — using it as the display URL produces an unreadable wall of text and
+ * a duplicate Discord auto-embed. So: Stories always get the constructed
+ * profile/stories link; posts/reels use yt-dlp's `webpage_url` (the field it
+ * reserves for canonical page links) and never the raw `url` for display.
+ */
+function displayUrl(event_type, username, entry) {
+  if (event_type === 'instagram_story') return FALLBACK_URL.instagram_story(username, entry.id);
+  return entry.webpage_url || FALLBACK_URL[event_type](username, entry.id);
+}
+
+/** A real image thumbnail only — never a video file (Discord embeds can't render one as `image`). */
+function pickThumbnail(entry) {
+  if (entry.thumbnail) return entry.thumbnail;
+  const fromList = entry.thumbnails?.[entry.thumbnails.length - 1]?.url;
+  if (fromList) return fromList;
+  const raw = entry.url || entry.webpage_url || '';
+  return IMAGE_EXT_RE.test(raw) ? raw : '';
+}
+
+/**
+ * The raw direct-media URL (when yt-dlp gave us one distinct from the display
+ * URL) — kept only for an optional "bezpośredni plik" link inside the embed,
+ * never put into plain message content. Expires after a few hours; that's
+ * fine since it's only useful right after the notification is sent.
+ */
+function rawMediaUrl(entry, shownUrl) {
+  const raw = entry.url || '';
+  if (!raw || raw === shownUrl) return null;
+  return /cdninstagram\.com/i.test(raw) ? raw : null;
+}
+
 function buildEvent(event_type, username, entry) {
+  const url = displayUrl(event_type, username, entry);
   return {
     event_type,
     external_id: String(entry.id),
     title: entry.title || entry.description || DEFAULT_TITLE[event_type],
-    url: entry.url || entry.webpage_url || FALLBACK_URL[event_type](username, entry.id),
-    thumbnail_url: entry.thumbnails?.[entry.thumbnails.length - 1]?.url || '',
+    url,
+    thumbnail_url: pickThumbnail(entry),
+    raw_media_url: rawMediaUrl(entry, url),
     published_at: entry.timestamp ? new Date(entry.timestamp * 1000).toISOString() : new Date().toISOString(),
     duration: entry.duration ? `${Math.round(entry.duration)}s` : '',
     viewer_count: '',
