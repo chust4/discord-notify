@@ -141,14 +141,52 @@ function buildEvent(event_type, username, entry) {
   };
 }
 
+// yt-dlp's `instagram:user` extractor (used to list a profile's posts/reels)
+// can be broken upstream independent of the session cookie (see file header).
+// When it fails with that specific signature, a full attempt still costs
+// 30-60+ seconds (yt-dlp exhausts several internal attempts before giving
+// up), which drags out every poll cycle for no benefit — it is virtually
+// guaranteed to fail again next cycle too. So: back off for an hour per
+// account after that specific failure instead of paying the full cost every
+// POLL_INTERVAL_SECONDS. In-memory only (resets on restart, which is fine —
+// a redeploy is exactly when a yt-dlp fix would land anyway).
+const BROKEN_EXTRACTOR_RE = /\[instagram:user\].*unable to extract data/i;
+const POSTS_BACKOFF_MS = 60 * 60 * 1000;
+const postsBackoffUntil = new Map(); // account.id -> resume-after timestamp (ms)
+
 /**
  * Posts + Reels: one combined listing of the profile, classified by URL shape.
  */
 async function checkPostsAndReels(account, knownIds, freshEvents) {
-  const entries = await flatPlaylist(`https://www.instagram.com/${account.identifier}/`, {
-    limit: 12,
-    cookies: sessionCookies(),
-  });
+  const backoffUntil = postsBackoffUntil.get(account.id);
+  if (backoffUntil && Date.now() < backoffUntil) {
+    // Stable message text (no countdown) so the poller's "only log when the
+    // error changes" dedup treats every skipped cycle as a non-event instead
+    // of re-logging to history every 5 minutes during the 1h backoff.
+    throw new Error('wstrzymane po znanym błędzie ekstraktora yt-dlp dla Instagrama (godzinny cooldown)');
+  }
+
+  let entries;
+  try {
+    entries = await flatPlaylist(`https://www.instagram.com/${account.identifier}/`, {
+      limit: 12,
+      cookies: sessionCookies(),
+    });
+  } catch (err) {
+    if (BROKEN_EXTRACTOR_RE.test(err.message)) {
+      postsBackoffUntil.set(account.id, Date.now() + POSTS_BACKOFF_MS);
+      log.warn('yt-dlp instagram:user extractor failed (known upstream issue) — backing off 1h', {
+        account: account.identifier,
+      });
+      throw new Error(
+        'ekstraktor yt-dlp dla profili Instagram jest obecnie oznaczony jako niedziałający (znany błąd upstream, ' +
+          'niezależny od cookie) — wstrzymuję próby na godzinę; sprawdź czy dostępna jest nowsza wersja yt-dlp'
+      );
+    }
+    throw err;
+  }
+  postsBackoffUntil.delete(account.id);
+
   if (!entries.length) throw new Error('pusta lista postów (profil prywatny, brak treści lub sesja wygasła)');
 
   const ids = entries.map((e) => String(e.id));
