@@ -1,6 +1,7 @@
 import { httpGetText } from './http.js';
 import { config } from '../config.js';
 import { createLogger } from '../logger.js';
+import { Settings } from '../store.js';
 import { isAvailable, fetchPosts, fetchStories } from './instaloaderRunner.js';
 
 const log = createLogger('platform:instagram');
@@ -99,22 +100,31 @@ function buildEvent(event_type, username, item) {
 }
 
 /**
- * Posts + Reels: one combined listing of the profile, classified by is_video
- * (Instagram no longer meaningfully distinguishes feed videos from Reels at
- * the metadata level Instaloader exposes — both are shown under /reel/).
+ * Posts + Reels: recent items from the profile feed. `is_reel` (product_type
+ * == "clips") distinguishes Reels from ordinary posts.
+ *
+ * Baseline handling needs its own persisted flag rather than relying on the
+ * shared knownIds being empty: Stories work independently and populate the
+ * combined watermark first, so by the time posts start returning, knownIds is
+ * already non-empty — without a dedicated flag the first successful fetch
+ * would treat all ~12 recent posts as new and blast them. The flag is set
+ * once the first post fetch succeeds and never fires notifications for the
+ * back-catalogue.
  */
 async function checkPostsAndReels(account, knownIds, freshEvents) {
+  const baselineKey = `instagram.posts_baseline.${account.id}`;
   const items = await fetchPosts(account.identifier, { limit: 12 });
   if (!items.length) throw new Error('pusta lista postów (profil prywatny, brak treści lub sesja wygasła)');
 
   const ids = items.map((i) => String(i.id));
-  if (knownIds.size === 0) {
+  if (!Settings.get(baselineKey)) {
     for (const id of ids) knownIds.add(id);
+    Settings.set(baselineKey, '1');
     return; // baseline only, no back-catalogue blast
   }
   const fresh = items.filter((i) => !knownIds.has(String(i.id))).reverse(); // oldest first
   for (const item of fresh) {
-    const event_type = item.is_video ? 'instagram_reel' : 'instagram_post';
+    const event_type = item.is_reel ? 'instagram_reel' : 'instagram_post';
     freshEvents.push(buildEvent(event_type, account.identifier, item));
     knownIds.add(String(item.id));
   }

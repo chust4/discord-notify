@@ -83,29 +83,54 @@ def safe_video_url(obj):
         return None
 
 
-def post_item(post):
-    is_video = bool(post.is_video)
-    shortcode_path = "reel" if is_video else "p"
+def _best_image(node):
+    """Largest available still image for a feed node (handles carousels)."""
+    src = node
+    if node.get("media_type") == 8:  # carousel — use first slide's image
+        carousel = node.get("carousel_media") or []
+        if carousel:
+            src = carousel[0]
+    candidates = (src.get("image_versions2") or {}).get("candidates") or []
+    return candidates[0]["url"] if candidates else ""
+
+
+def feed_item(node):
+    """Map one item from the private mobile feed API to our common shape."""
+    code = node.get("code") or ""
+    is_reel = node.get("product_type") == "clips"
+    pk = node.get("pk") or node.get("id") or code
+    caption = node.get("caption")
+    title = (caption.get("text") if isinstance(caption, dict) else "") or ""
+    videos = node.get("video_versions") or []
+    taken = node.get("taken_at")
+    duration = node.get("video_duration")
+    path = "reel" if is_reel else "p"
     return {
-        "id": str(post.mediaid),
-        "url": f"https://www.instagram.com/{shortcode_path}/{post.shortcode}/",
-        "title": (post.caption or "")[:200],
-        "thumbnail_url": post.url,
-        "video_url": safe_video_url(post),
-        "timestamp": int(post.date_utc.timestamp()),
-        "duration": int(post.video_duration) if is_video and post.video_duration else None,
-        "is_video": is_video,
+        "id": str(pk),
+        "url": f"https://www.instagram.com/{path}/{code}/" if code
+               else f"https://www.instagram.com/p/{pk}/",
+        "title": title[:200],
+        "thumbnail_url": _best_image(node),
+        "video_url": videos[0]["url"] if videos else None,
+        "timestamp": int(taken) if taken else None,
+        "duration": int(duration) if duration else None,
+        "is_reel": is_reel,
     }
 
 
 def fetch_posts(L, username, limit):
+    # Instaloader 4.15.1's logged-in Profile.get_posts() hits a GraphQL query
+    # (xdt_api__v1__feed__user_timeline_graphql_connection) that Instagram
+    # currently rejects with 400 "invalid request" — a known upstream bug
+    # (instaloader#2695) with no released fix. The private mobile feed API
+    # (i.instagram.com/api/v1/feed/user/<id>/) returns the same recent posts
+    # and works with our authenticated session (verified live against the NAS).
+    # Profile.from_username() itself still works, so we use it only to resolve
+    # the numeric user id, then fetch the feed directly.
     profile = instaloader.Profile.from_username(L.context, username)
-    items = []
-    for post in profile.get_posts():
-        items.append(post_item(post))
-        if len(items) >= limit:
-            break
-    return items
+    data = L.context.get_iphone_json(f"api/v1/feed/user/{profile.userid}/", {"count": limit})
+    nodes = data.get("items") or []
+    return [feed_item(n) for n in nodes[:limit]]
 
 
 def fetch_stories(L, username):

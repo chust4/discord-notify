@@ -230,12 +230,11 @@ Automatic updates** (polling repo), aby Portainer sam pobierał zmiany w interwa
   wbudowana w obraz) zamiast yt-dlp — Instagram aktywnie zwalcza
   automatyzację, więc mimo to możliwe są okresowe błędy (403/429, wygasła
   sesja); w takim wypadku sprawdź w panelu → **Logi / Historia** dokładny
-  komunikat. **Stan na teraz:** Stories działają potwierdzone w praktyce.
-  Posty/Reels bywają odrzucane przez Instagram osobnym błędem
-  („invalid request" na konkretnym zapytaniu do listy postów) niezależnie od
-  poprawnej sesji — to znany, zgłoszony problem w samym Instaloaderze
-  (nie ma jeszcze wydanej poprawki), więc traktuj wykrywanie postów/Reels
-  jako mniej pewne niż Stories, dopóki upstream tego nie naprawi.
+  komunikat. Uwaga techniczna: logowana metoda Instaloadera do listy postów
+  (GraphQL) jest obecnie zepsuta po stronie Instagrama (błąd „invalid request",
+  znany bug upstream), więc posty/Reels pobieramy bezpośrednio z prywatnego
+  API mobilnego Instagrama (`api/v1/feed/user/...`), które działa z zalogowaną
+  sesją — Stories korzystają z osobnej, sprawdzonej ścieżki.
 
 ---
 
