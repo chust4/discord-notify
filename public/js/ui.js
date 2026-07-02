@@ -114,3 +114,13 @@ export function avatarHtml(url, name, cls = '') {
   const letter = (name || '?').trim()[0]?.toUpperCase() || '?';
   return `<div class="avatar ${cls}">${esc(letter)}</div>`;
 }
+
+/**
+ * Avatar routed through the server-side proxy/cache (`/api/avatar/<kind>/<id>`)
+ * so expired/hotlink-blocked social CDN URLs still render. Falls back to a
+ * letter placeholder when there is no avatar or the proxy 404s.
+ */
+export function avatarProxyHtml(kind, id, hasAvatar, name, cls = '') {
+  if (!hasAvatar) return avatarHtml(null, name, cls);
+  return avatarHtml(`/api/avatar/${kind}/${id}`, name, cls);
+}

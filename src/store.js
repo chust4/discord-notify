@@ -216,6 +216,11 @@ export const Accounts = {
       .prepare('UPDATE accounts SET last_error = ?, last_checked_at = ? WHERE id = ?')
       .run(error, nowIso(), id);
   },
+  setAvatar(id, url) {
+    getDb()
+      .prepare('UPDATE accounts SET avatar_url = ?, updated_at = ? WHERE id = ?')
+      .run(url, nowIso(), id);
+  },
   remove(id) {
     getDb().prepare('DELETE FROM accounts WHERE id = ?').run(id);
   },

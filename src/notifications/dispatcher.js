@@ -1,4 +1,4 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { getClient, isReady } from '../bot/runtime.js';
 import { checkChannelPermissions } from '../bot/permissions.js';
 import { renderTemplate } from './templates.js';
@@ -150,19 +150,24 @@ async function sendOne({ setting, event, profile, account, isTest = false }) {
   const allowedMentions = buildAllowedMentions(setting.role_ping_id);
 
   try {
-    // Hybrid pinned panel: keep editing the persistent pinned panel AND send a
-    // fresh, pinging notification message (deleting the previous temp one).
-    if (mode === 'pinned_panel') {
-      return await sendHybridPinnedPanel({
-        client, channel, setting, event, profile, account, embed, content, allowedMentions, perm, isTest,
-      });
+    // Plain "panel": a single rolling message that is DELETED and re-sent on
+    // each event (not edited), so the role ping actually fires a Discord
+    // notification — editing a message never re-notifies. The previous one is
+    // removed so the channel keeps only the latest.
+    if (mode === 'panel') {
+      const payload = { embeds: [embed], allowedMentions };
+      if (content) payload.content = isTest ? `🧪 (TEST) ${content}` : content;
+      await repostNotification({ channel, setting, event, profile, account, payload });
+      return { status: EVENT_STATUS.SENT, detail: 'Wysłano nowe powiadomienie, usunięto poprzednie' };
     }
 
-    // Plain panel: edit one message in place, no extra notification.
-    if (mode === 'panel') {
-      const payload = { embeds: [embed] };
-      if (content) payload.content = isTest ? `🧪 (TEST) ${content}` : content;
-      return await sendOrEditPanel({ channel, setting, payload });
+    // Hybrid pinned panel: a persistent pinned status embed edited in place,
+    // PLUS a separate lightweight pinging message (deleted+resent). The ping
+    // message carries no embed, so it no longer visually duplicates the panel.
+    if (mode === 'pinned_panel') {
+      return await sendHybridPinnedPanel({
+        channel, setting, event, profile, account, embed, content, context, allowedMentions, perm, isTest,
+      });
     }
 
     // embed / message modes.
@@ -193,38 +198,56 @@ function buildAllowedMentions(role_ping_id) {
 }
 
 /**
- * Plain panel mode: edit the stored message if it still exists, otherwise
- * create a new one and persist its id.
+ * Send a fresh notification message, record it, and delete the bot's own
+ * PREVIOUS message of the same (guild, channel, profile, platform, event_type).
+ * A brand-new message (unlike an edit) fires the role ping; deleting the prior
+ * one keeps the channel to a single rolling notification. Single deletes only —
+ * never bulk, never user messages, never the pinned panel.
  */
-async function sendOrEditPanel({ channel, setting, payload }) {
-  if (setting.panel_message_id && setting.panel_channel_id === channel.id) {
+async function repostNotification({ channel, setting, event, profile, account, payload }) {
+  const sent = await channel.send(payload);
+  await addReactionIfConfigured(sent, setting);
+
+  const key = {
+    guild_id: setting.guild_id,
+    channel_id: channel.id,
+    profile_id: profile.id,
+    platform: account?.platform || event.platform || null,
+    event_type: event.event_type,
+  };
+  const newId = TempNotifications.record({ ...key, message_id: sent.id });
+  log.info('Notification sent + recorded', { event: event.event_type, message_id: sent.id });
+
+  for (const prev of TempNotifications.findActivePrevious({ ...key, excludeId: newId })) {
     try {
-      const msg = await channel.messages.fetch(setting.panel_message_id);
-      await msg.edit(payload);
-      await addReactionIfConfigured(msg, setting);
-      return { status: EVENT_STATUS.PANEL_EDITED, detail: 'Zaktualizowano panel' };
-    } catch {
-      log.warn('Panel message missing, recreating', { setting_id: setting.id });
+      await channel.messages.delete(prev.message_id);
+      TempNotifications.markDeleted(prev.id);
+      log.info('Deleted previous notification', { message_id: prev.message_id });
+    } catch (err) {
+      // Own messages can normally be deleted without Manage Messages; treat any
+      // failure (already gone / missing permission) as non-fatal.
+      TempNotifications.markDeleted(prev.id);
+      const reason = err.code === 10008 ? 'wiadomość już nie istnieje'
+        : err.code === 50013 ? 'brak uprawnień (Manage Messages)'
+        : err.message;
+      log.warn('Could not delete previous notification', { message_id: prev.message_id, reason });
     }
   }
-  const msg = await channel.send(payload);
-  NotificationSettings.setPanelMessage(setting.id, msg.id, channel.id);
-  await addReactionIfConfigured(msg, setting);
-  return { status: EVENT_STATUS.SENT, detail: 'Utworzono panel' };
+  return sent;
 }
 
 /**
- * Hybrid "przyklejona wiadomość" (pinned panel):
- *  1. update/create+pin the persistent status panel (never deleted),
- *  2. send a NEW temporary notification message (with role ping),
- *  3. record its message_id,
- *  4. delete the PREVIOUS temporary notification of the same type (own message
- *     only, single delete — never bulk, never user messages, never the panel).
+ * Hybrid "przypięty panel" (pinned panel):
+ *  1. maintain the persistent, pinned status embed — edited in place, never
+ *     deleted, and carrying no content/mentions so it never pings;
+ *  2. send a separate, lightweight pinging message via repostNotification —
+ *     content only (link auto-embed suppressed) so it does NOT visually
+ *     duplicate the panel sitting right above it.
  */
 async function sendHybridPinnedPanel({
-  client, channel, setting, event, profile, account, embed, content, allowedMentions, perm, isTest,
+  channel, setting, event, profile, account, embed, content, context, allowedMentions, perm, isTest,
 }) {
-  // --- 1. persistent panel (status board) ---
+  // --- 1. persistent pinned panel (rich embed, no ping) ---
   const panelPayload = { embeds: [embed] };
   let panelMsg = null;
   if (setting.panel_message_id && setting.panel_channel_id === channel.id) {
@@ -250,58 +273,18 @@ async function sendHybridPinnedPanel({
     }
   }
 
-  // --- 2. temporary notification message (the real, pinging notification) ---
-  const notifContent = content || `${profile.name} — ${event.url || ''}`.trim();
-  const tempMsg = await channel.send({
-    content: (isTest ? '🧪 (TEST) ' : '') + notifContent,
-    embeds: [embed],
-    allowedMentions,
+  // --- 2. lightweight pinging notification (no duplicate embed) ---
+  const line = content || `${context.creator_name} — ${event.url || ''}`.trim();
+  await repostNotification({
+    channel, setting, event, profile, account,
+    payload: {
+      content: (isTest ? '🧪 (TEST) ' : '') + line,
+      allowedMentions,
+      flags: MessageFlags.SuppressEmbeds,
+    },
   });
-  log.info('Temporary notification sent', {
-    profile: profile.name, event: event.event_type, channel: channel.id, message_id: tempMsg.id,
-  });
-  await addReactionIfConfigured(tempMsg, setting);
 
-  // --- 3. remember it ---
-  const newId = TempNotifications.record({
-    guild_id: setting.guild_id,
-    channel_id: channel.id,
-    profile_id: profile.id,
-    platform: account?.platform || event.platform || null,
-    event_type: event.event_type,
-    message_id: tempMsg.id,
-  });
-  log.info('Saved temp notification message_id', { id: newId, message_id: tempMsg.id });
-
-  // --- 4. delete the previous temp notification of the same type ---
-  const previous = TempNotifications.findActivePrevious({
-    guild_id: setting.guild_id,
-    channel_id: channel.id,
-    profile_id: profile.id,
-    platform: account?.platform || event.platform || null,
-    event_type: event.event_type,
-    excludeId: newId,
-  });
-  for (const prev of previous) {
-    try {
-      await channel.messages.delete(prev.message_id);
-      TempNotifications.markDeleted(prev.id);
-      log.info('Deleted previous temp notification', { message_id: prev.message_id });
-    } catch (err) {
-      // Own messages can normally be deleted without Manage Messages; treat any
-      // failure (already gone / missing permission) as non-fatal.
-      TempNotifications.markDeleted(prev.id); // stop retrying a message we can't remove
-      const reason = err.code === 10008 ? 'wiadomość już nie istnieje'
-        : err.code === 50013 ? 'brak uprawnień (Manage Messages)'
-        : err.message;
-      log.warn('Could not delete previous temp notification', {
-        message_id: prev.message_id, reason,
-        manageMessages: perm.permissions.ManageMessages,
-      });
-    }
-  }
-
-  return { status: EVENT_STATUS.SENT, detail: 'Panel zaktualizowany + wysłano powiadomienie' };
+  return { status: EVENT_STATUS.PANEL_EDITED, detail: 'Panel zaktualizowany + wysłano powiadomienie' };
 }
 
 /**

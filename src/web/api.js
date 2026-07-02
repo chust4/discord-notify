@@ -28,6 +28,8 @@ import { sendTest } from '../notifications/dispatcher.js';
 import { getStatus, getClient, isReady } from '../bot/runtime.js';
 import { runOnce } from '../poller.js';
 import { describeConfig, saveOverrides } from '../runtimeSettings.js';
+import { freshCache, anyCache, cacheContentType, fetchToCache } from '../avatarCache.js';
+import fs from 'node:fs';
 
 const log = createLogger('api');
 export const apiRouter = express.Router();
@@ -61,6 +63,73 @@ apiRouter.get('/meta', (_req, res) => {
     reactionEmojiChoices: REACTION_EMOJI_CHOICES,
   });
 });
+
+/* ------------------------------------------------------------------ avatars */
+
+// Re-resolve an account's avatar at most once per hour, updating the stored URL
+// (also benefits the Discord embed, which needs a still-valid public URL).
+const lastAvatarReresolve = new Map();
+async function refreshAccountAvatar(account) {
+  if (!account) return null;
+  const now = Date.now();
+  if ((lastAvatarReresolve.get(account.id) || 0) > now - 60 * 60 * 1000) return account.avatar_url;
+  lastAvatarReresolve.set(account.id, now);
+  try {
+    const resolved = await getPlatform(account.platform).resolve(account.input_url || account.identifier);
+    if (resolved?.avatar_url && resolved.avatar_url !== account.avatar_url) {
+      Accounts.setAvatar(account.id, resolved.avatar_url);
+      return resolved.avatar_url;
+    }
+  } catch {
+    /* leave stale */
+  }
+  return account.avatar_url;
+}
+
+function streamCached(res, key) {
+  res.set('Content-Type', cacheContentType(key));
+  res.set('Cache-Control', 'public, max-age=3600');
+  fs.createReadStream(anyCache(key)).pipe(res);
+}
+
+/**
+ * Avatar proxy: serves the cached image, (re)fetching from the stored CDN URL
+ * and, on expiry, re-resolving the account for a fresh URL. Falls back to a
+ * stale cache, then 404 (the UI then shows a letter placeholder).
+ */
+async function serveAvatar(res, key, currentUrl, reresolve) {
+  if (freshCache(key)) return streamCached(res, key);
+  if (currentUrl && (await fetchToCache(key, currentUrl))) return streamCached(res, key);
+  if (reresolve) {
+    const fresh = await reresolve();
+    if (fresh && fresh !== currentUrl && (await fetchToCache(key, fresh))) return streamCached(res, key);
+  }
+  if (anyCache(key)) return streamCached(res, key);
+  return res.status(404).end();
+}
+
+apiRouter.get('/avatar/account/:id', wrap(async (req, res) => {
+  const account = Accounts.byId(Number(req.params.id));
+  if (!account) return res.status(404).end();
+  await serveAvatar(res, `acc-${account.id}`, account.avatar_url, () => refreshAccountAvatar(account));
+}));
+
+apiRouter.get('/avatar/profile/:id', wrap(async (req, res) => {
+  const profile = Profiles.byId(Number(req.params.id));
+  if (!profile) return res.status(404).end();
+  await serveAvatar(res, `prof-${profile.id}`, profile.avatar_url, async () => {
+    // Profile avatar comes from one of its accounts — re-resolve them until one
+    // yields an avatar, and persist it back to the profile.
+    for (const acc of Accounts.forProfile(profile.id)) {
+      const url = await refreshAccountAvatar(acc);
+      if (url) {
+        Profiles.update(profile.id, { avatar_url: url });
+        return url;
+      }
+    }
+    return profile.avatar_url;
+  });
+}));
 
 /* ------------------------------------------------------------- diagnostics */
 

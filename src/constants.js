@@ -20,8 +20,8 @@ export const REACTION_EMOJI_CHOICES = ['❤️', '🔥', '🎉', '👀', '🔔',
 export const MODE_LABELS = {
   message: 'Zwykła wiadomość',
   embed: 'Embed Discord',
-  panel: 'Panel (edytowana wiadomość)',
-  pinned_panel: 'Przypięty panel',
+  panel: 'Panel (odświeżany + ping)',
+  pinned_panel: 'Przypięty panel (hybryda)',
 };
 
 // All notification event types. `platform` ties an event to an account,

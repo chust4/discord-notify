@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import {
-  h, esc, toast, modal, confirmDialog, fmtDate, fmtUptime, avatarHtml, PLATFORM_ICON,
+  h, esc, toast, modal, confirmDialog, fmtDate, fmtUptime, avatarHtml, avatarProxyHtml, PLATFORM_ICON,
 } from './ui.js';
 
 const view = document.getElementById('view');
@@ -102,7 +102,7 @@ function profileCardHtml(p) {
   return `
     <div class="card profile-card" data-profile-id="${p.id}">
       <div class="profile-card-head">
-        ${avatarHtml(p.avatar_url, p.name)}
+        ${avatarProxyHtml('profile', p.id, !!p.avatar_url, p.name)}
         <div style="min-width:0">
           <div class="profile-card-name">${esc(p.name)}</div>
           <div class="profile-card-meta">${p.enabled ? '🟢 Aktywny' : '⚪ Wyłączony'}</div>
@@ -149,8 +149,8 @@ function statTilesHtml(p) {
 const MODE_DESC = {
   message: 'Zwykła wiadomość na czacie. Każde zdarzenie = nowa wiadomość. Pinguje, jeśli ustawisz rolę.',
   embed: 'Ładny embed Discord + opcjonalny ping w treści. Każde zdarzenie = nowa wiadomość.',
-  panel: 'Bot edytuje JEDNĄ wiadomość w miejscu (tablica statusu). Cicho — bez pingu, bez przypięcia, bez osobnych powiadomień.',
-  pinned_panel: 'Hybryda: przypięty panel ze statusem (edytowany na bieżąco) + przy każdym zdarzeniu OSOBNA wiadomość z pingiem roli. Poprzednia tymczasowa wiadomość jest kasowana, panel zostaje.',
+  panel: 'Jedna „krocząca” wiadomość: przy każdym zdarzeniu bot wysyła NOWĄ (z embedem i pingiem roli) i USUWA poprzednią. Kanał ma zawsze tylko najnowszą, a ludzie dostają realne powiadomienie (edycja nie pinguje).',
+  pinned_panel: 'Hybryda: przypięty panel ze statusem (edytowany na bieżąco, zostaje) + osobna, lekka wiadomość z pingiem roli (bez powtórzonego embeda). Poprzednia wiadomość z pingiem jest kasowana, panel zostaje.',
 };
 
 const VAR_DESC = {
@@ -235,7 +235,7 @@ async function renderProfile({ id }) {
     <a class="back-link" href="#/">← Wróć do dashboardu</a>
     <div class="page-head">
       <div class="row">
-        ${avatarHtml(profile.avatar_url, profile.name, 'lg')}
+        ${avatarProxyHtml('profile', profile.id, !!profile.avatar_url, profile.name, 'lg')}
         <div>
           <h2 style="margin:0">${esc(profile.name)}</h2>
           ${profile.notes ? `<p class="faint" style="margin:4px 0 0">${esc(profile.notes)}</p>` : ''}
@@ -325,7 +325,7 @@ function renderAccounts(profile) {
     .map(
       (a) => `
       <div class="card" style="display:flex;align-items:center;gap:12px">
-        <a href="${esc(a.input_url || '#')}" target="_blank" rel="noopener" title="Otwórz ${esc(a.platform)}">${avatarHtml(a.avatar_url, a.display_name)}</a>
+        <a href="${esc(a.input_url || '#')}" target="_blank" rel="noopener" title="Otwórz ${esc(a.platform)}">${avatarProxyHtml('account', a.id, !!a.avatar_url, a.display_name)}</a>
         <div style="flex:1;min-width:0">
           <a href="${esc(a.input_url || '#')}" target="_blank" rel="noopener" class="account-link" title="Otwórz profil ${esc(a.platform)}">
             <span style="font-weight:600">${PLATFORM_ICON[a.platform]} ${esc(a.display_name || a.identifier)}</span> ↗
